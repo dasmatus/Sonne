@@ -1,0 +1,33 @@
+[package]
+name = "sonne_preview"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+license = "GPL-3.0-or-later"
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/sonne_preview.rs"
+doctest = false
+
+[features]
+default = []
+# The side that spawns a preview and paints it inside an mcsapi window.
+host = ["dep:mcsapi-ui", "dep:log"]
+# Runs a wasm32-wasip2 preview component in-process with wasmtime.
+wasm = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:anyhow"]
+
+[dependencies]
+anyhow = { workspace = true, optional = true }
+egui = { workspace = true, features = ["serde"] }
+log = { workspace = true, optional = true }
+mcsapi-ui = { workspace = true, optional = true }
+postcard.workspace = true
+serde.workspace = true
+wasmtime = { workspace = true, optional = true }
+wasmtime-wasi = { workspace = true, optional = true }
+
+[[example]]
+name = "preview_counter"

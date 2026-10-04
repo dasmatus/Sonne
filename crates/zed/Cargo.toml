@@ -124,6 +124,7 @@ gpui = { workspace = true, features = ["profiler", "stacker"] }
 gpui_platform = { workspace = true, features = [
     "screen-capture",
     "font-kit",
+    "mcsapi-default",
     "wayland",
     "x11",
 ] }
