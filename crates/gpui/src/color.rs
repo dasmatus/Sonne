@@ -907,7 +907,49 @@ impl LinearColorStop {
     }
 }
 
+/// What a [`Background`] paints, for renderers outside this crate that cannot run GPUI's shaders.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BackgroundPaint {
+    /// One color.
+    Solid(Hsla),
+    /// A two-stop gradient along `angle`, in degrees clockwise from the top.
+    LinearGradient {
+        /// The gradient line's direction.
+        angle: f32,
+        /// Where the gradient starts and ends.
+        stops: [LinearColorStop; 2],
+        /// The space the stops are interpolated in.
+        color_space: ColorSpace,
+    },
+    /// Diagonal stripes of `color`.
+    PatternSlash(Hsla),
+    /// A checkerboard of `color` squares `size` pixels wide.
+    Checkerboard {
+        /// The color of the filled squares.
+        color: Hsla,
+        /// The side of one square.
+        size: f32,
+    },
+}
+
 impl Background {
+    /// Returns what this background paints.
+    pub fn paint(&self) -> BackgroundPaint {
+        match self.tag {
+            BackgroundTag::Solid => BackgroundPaint::Solid(self.solid),
+            BackgroundTag::LinearGradient => BackgroundPaint::LinearGradient {
+                angle: self.gradient_angle_or_pattern_height,
+                stops: self.colors,
+                color_space: self.color_space,
+            },
+            BackgroundTag::PatternSlash => BackgroundPaint::PatternSlash(self.solid),
+            BackgroundTag::Checkerboard => BackgroundPaint::Checkerboard {
+                color: self.solid,
+                size: self.gradient_angle_or_pattern_height,
+            },
+        }
+    }
+
     /// Returns the solid color if this is a solid background, None otherwise.
     pub fn as_solid(&self) -> Option<Hsla> {
         if self.tag == BackgroundTag::Solid {

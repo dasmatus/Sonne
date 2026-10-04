@@ -65,6 +65,11 @@ pub fn web_init() {
 
 /// Returns the default [`Platform`] for the current OS.
 pub fn current_platform(headless: bool) -> Rc<dyn Platform> {
+    #[cfg(all(feature = "mcsapi", any(target_os = "linux", target_os = "freebsd")))]
+    if !headless && let Some(platform) = mcsapi_platform() {
+        return platform;
+    }
+
     #[cfg(target_os = "macos")]
     {
         Rc::new(gpui_macos::MacPlatform::new(headless))
@@ -87,6 +92,36 @@ pub fn current_platform(headless: bool) -> Rc<dyn Platform> {
     {
         let _ = headless;
         Rc::new(gpui_web::WebPlatform::new(true))
+    }
+}
+
+/// Returns a platform whose windows mcsapi draws, when `GPUI_TOOLKIT=mcsapi` asks for one or,
+/// with the `mcsapi-default` feature, when `GPUI_TOOLKIT` is unset.
+///
+/// Its window opens on a thread of its own and everything else stays on the headless Linux
+/// platform. If the window cannot open, the native backend takes over.
+#[cfg(all(feature = "mcsapi", any(target_os = "linux", target_os = "freebsd")))]
+fn mcsapi_platform() -> Option<Rc<dyn Platform>> {
+    let wanted = match std::env::var_os("GPUI_TOOLKIT") {
+        Some(toolkit) => toolkit == "mcsapi",
+        None => cfg!(feature = "mcsapi-default"),
+    };
+    if !wanted {
+        return None;
+    }
+    let name = std::env::current_exe()
+        .ok()
+        .and_then(|path| Some(path.file_stem()?.to_string_lossy().into_owned()))
+        .unwrap_or_else(|| "gpui".to_owned());
+    match gpui_mcsapi::spawn_host(gpui_mcsapi::HostOptions::new(&name)) {
+        Ok(host) => Some(gpui_mcsapi::McsapiPlatform::new(
+            gpui_linux::current_platform(true),
+            host,
+        )),
+        Err(error) => {
+            log::error!("falling back to the native backend: {error:#}");
+            None
+        }
     }
 }
 
