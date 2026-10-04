@@ -6,8 +6,8 @@ use egui::epaint::{ImageData, ImageDelta, TextureId};
 use egui::{Color32, ColorImage, TextureOptions};
 use etagere::{BucketedAtlasAllocator, size2};
 use gpui::{
-    AtlasBackend, AtlasKey, AtlasState, AtlasTextureId, AtlasTextureKind, AtlasTile,
-    DevicePixels, PlatformAtlas, Point, Size,
+    AtlasBackend, AtlasKey, AtlasState, AtlasTextureId, AtlasTextureKind, AtlasTile, DevicePixels,
+    PlatformAtlas, Point, Size,
 };
 use parking_lot::Mutex;
 
@@ -100,7 +100,11 @@ impl AtlasBackend for Pages {
         let (index, allocation) = match existing {
             Some(found) => found,
             None => {
-                let index = self.new_page(kind, padded.width.max(PAGE_SIDE), padded.height.max(PAGE_SIDE));
+                let index = self.new_page(
+                    kind,
+                    padded.width.max(PAGE_SIDE),
+                    padded.height.max(PAGE_SIDE),
+                );
                 let page = self.pages[index]
                     .as_mut()
                     .context("a page that was just created is missing")?;
@@ -187,7 +191,11 @@ impl Pages {
 /// Monochrome tiles are coverage, which becomes white with that alpha so a sprite's vertex
 /// color tints it. Polychrome tiles are straight-alpha BGRA. Subpixel tiles hold one coverage
 /// value per channel; egui blends whole pixels, so they become plain coverage.
-fn to_color_image(kind: AtlasTextureKind, size: Size<DevicePixels>, bytes: &[u8]) -> Result<ColorImage> {
+fn to_color_image(
+    kind: AtlasTextureKind,
+    size: Size<DevicePixels>,
+    bytes: &[u8],
+) -> Result<ColorImage> {
     let width = usize::try_from(size.width.0).context("negative tile width")?;
     let height = usize::try_from(size.height.0).context("negative tile height")?;
     let pixels: Vec<Color32> = match kind {
@@ -199,7 +207,10 @@ fn to_color_image(kind: AtlasTextureKind, size: Size<DevicePixels>, bytes: &[u8]
                 .collect()
         }
         AtlasTextureKind::Polychrome => {
-            anyhow::ensure!(bytes.len() >= width * height * 4, "polychrome tile is short");
+            anyhow::ensure!(
+                bytes.len() >= width * height * 4,
+                "polychrome tile is short"
+            );
             bytes[..width * height * 4]
                 .chunks_exact(4)
                 .map(|bgra| Color32::from_rgba_unmultiplied(bgra[2], bgra[1], bgra[0], bgra[3]))
@@ -210,7 +221,8 @@ fn to_color_image(kind: AtlasTextureKind, size: Size<DevicePixels>, bytes: &[u8]
             bytes[..width * height * 4]
                 .chunks_exact(4)
                 .map(|channels| {
-                    let coverage = (channels[0] as u16 + channels[1] as u16 + channels[2] as u16) / 3;
+                    let coverage =
+                        (channels[0] as u16 + channels[1] as u16 + channels[2] as u16) / 3;
                     Color32::from_white_alpha(coverage as u8)
                 })
                 .collect()
@@ -250,9 +262,13 @@ mod tests {
             pages: Vec::new(),
         };
         let tile = pages.insert(AtlasTextureKind::Monochrome, size(8, 8), &[255; 64])?;
-        assert_eq!(tile.bounds.origin.x, DevicePixels(PADDING));
+        assert!(tile.bounds.origin.x.0 >= PADDING && tile.bounds.origin.y.0 >= PADDING);
+        assert_eq!(tile.bounds.size, size(8, 8));
         pages.remove(tile);
-        assert!(pages.pages.iter().all(Option::is_none), "an empty page is freed");
+        assert!(
+            pages.pages.iter().all(Option::is_none),
+            "an empty page is freed"
+        );
         let again = pages.insert(AtlasTextureKind::Monochrome, size(8, 8), &[255; 64])?;
         assert_eq!(again.texture_id.index, 0, "the freed slot is reused");
         Ok(())

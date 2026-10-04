@@ -58,7 +58,8 @@ impl GpuiSurface {
     /// Asks every window to close, as when the surface itself is going away.
     pub fn close_all(&self) {
         for slot in self.bridge.windows.lock().iter() {
-            self.bridge.send(HostEvent::CloseRequested { window: slot.id });
+            self.bridge
+                .send(HostEvent::CloseRequested { window: slot.id });
         }
     }
 
@@ -69,7 +70,14 @@ impl GpuiSurface {
             .windows
             .lock()
             .iter()
-            .map(|slot| (slot.id, slot.title.clone(), slot.frame.clone(), slot.requested_size))
+            .map(|slot| {
+                (
+                    slot.id,
+                    slot.title.clone(),
+                    slot.frame.clone(),
+                    slot.requested_size,
+                )
+            })
             .collect();
         self.had_windows |= !slots.is_empty();
         self.windows
@@ -136,7 +144,10 @@ impl GpuiSurface {
                 ))
             };
             for clipped in &frame.shapes {
-                let clip = clipped.clip_rect.translate(rect.min.to_vec2()).intersect(*rect);
+                let clip = clipped
+                    .clip_rect
+                    .translate(rect.min.to_vec2())
+                    .intersect(*rect);
                 if clip.is_positive() {
                     let mut shape = clipped.shape.clone();
                     shape.translate(rect.min.to_vec2());

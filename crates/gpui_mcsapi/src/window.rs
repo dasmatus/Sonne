@@ -128,11 +128,13 @@ impl WindowInner {
         if !self.state.borrow().laid_out {
             return;
         }
-        with_callback!(self, request_frame, |callback| callback(RequestFrameOptions {
-            require_presentation: false,
-            force_render: false,
-            ..Default::default()
-        }));
+        with_callback!(self, request_frame, |callback| callback(
+            RequestFrameOptions {
+                require_presentation: false,
+                force_render: false,
+                ..Default::default()
+            }
+        ));
     }
 
     pub(crate) fn handle_input(&self, input: PlatformInput) {
@@ -204,7 +206,8 @@ impl WindowInner {
     }
 
     pub(crate) fn request_close(&self) {
-        let should_close = with_callback!(self, should_close, |callback| callback()).unwrap_or(true);
+        let should_close =
+            with_callback!(self, should_close, |callback| callback()).unwrap_or(true);
         if should_close {
             let close = self.callbacks.borrow_mut().close.take();
             if let Some(close) = close {
@@ -252,7 +255,14 @@ impl PlatformWindow for McsapiWindow {
     fn resize(&mut self, size: Size<Pixels>) {
         // The surface owns the layout; this becomes the size it is asked for.
         let id = self.0.id;
-        if let Some(slot) = self.0.bridge.windows.lock().iter_mut().find(|slot| slot.id == id) {
+        if let Some(slot) = self
+            .0
+            .bridge
+            .windows
+            .lock()
+            .iter_mut()
+            .find(|slot| slot.id == id)
+        {
             slot.requested_size = egui::vec2(f32::from(size.width), f32::from(size.height));
         }
         self.0.bridge.context.request_repaint();
@@ -328,7 +338,14 @@ impl PlatformWindow for McsapiWindow {
     fn set_title(&mut self, title: &str) {
         self.0.state.borrow_mut().title = title.to_owned();
         let id = self.0.id;
-        if let Some(slot) = self.0.bridge.windows.lock().iter_mut().find(|slot| slot.id == id) {
+        if let Some(slot) = self
+            .0
+            .bridge
+            .windows
+            .lock()
+            .iter_mut()
+            .find(|slot| slot.id == id)
+        {
             slot.title = title.to_owned();
         }
     }
@@ -394,7 +411,14 @@ impl PlatformWindow for McsapiWindow {
         let atlas = &self.0.atlas;
         let shapes = scene_to_shapes(scene, scale_factor, &|id| atlas.slot(id));
         let id = self.0.id;
-        if let Some(slot) = self.0.bridge.windows.lock().iter_mut().find(|slot| slot.id == id) {
+        if let Some(slot) = self
+            .0
+            .bridge
+            .windows
+            .lock()
+            .iter_mut()
+            .find(|slot| slot.id == id)
+        {
             slot.frame = Some(Arc::new(Frame { shapes }));
         }
         self.0.bridge.context.request_repaint();

@@ -8,11 +8,10 @@ use std::time::Duration;
 use anyhow::Result;
 use futures::StreamExt as _;
 use gpui::{
-    Action, ActivityGuard, AnyWindowHandle, BackgroundExecutor, Bounds, ClipboardItem,
-    CursorStyle, DisplayId, ForegroundExecutor, Keymap, Menu, MenuItem, OwnedMenu,
-    PathPromptOptions, Pixels, Platform, PlatformDisplay, PlatformKeyboardLayout,
-    PlatformKeyboardMapper, PlatformTextSystem, PlatformWindow, Point, Task, ThermalState,
-    WindowAppearance, WindowParams, px,
+    Action, ActivityGuard, AnyWindowHandle, BackgroundExecutor, Bounds, ClipboardItem, CursorStyle,
+    DisplayId, ForegroundExecutor, Keymap, Menu, MenuItem, OwnedMenu, PathPromptOptions, Pixels,
+    Platform, PlatformDisplay, PlatformKeyboardLayout, PlatformKeyboardMapper, PlatformTextSystem,
+    PlatformWindow, Point, Task, ThermalState, WindowAppearance, WindowParams, px,
 };
 
 use crate::window::{McsapiWindow, WindowInner};
@@ -95,7 +94,11 @@ fn dispatch(
     clipboard: &RefCell<Option<ClipboardItem>>,
     event: HostEvent,
 ) {
-    let find = |id: u64| live_windows(windows).into_iter().find(|window| window.id == id);
+    let find = |id: u64| {
+        live_windows(windows)
+            .into_iter()
+            .find(|window| window.id == id)
+    };
     match event {
         HostEvent::Input { window, input } => {
             if let Some(window) = find(window) {

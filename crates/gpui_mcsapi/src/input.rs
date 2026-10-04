@@ -38,10 +38,14 @@ impl InputTranslator {
         let modifiers = convert_modifiers(modifiers);
         if modifiers != self.modifiers {
             self.modifiers = modifiers;
-            send_input(&mut send, window, PlatformInput::ModifiersChanged(ModifiersChangedEvent {
-                modifiers,
-                capslock: Default::default(),
-            }));
+            send_input(
+                &mut send,
+                window,
+                PlatformInput::ModifiersChanged(ModifiersChangedEvent {
+                    modifiers,
+                    capslock: Default::default(),
+                }),
+            );
         }
 
         let mut events = events.iter().peekable();
@@ -49,11 +53,15 @@ impl InputTranslator {
             match event {
                 Event::PointerMoved(position) => {
                     self.position = to_point(*position - origin.to_vec2());
-                    send_input(&mut send, window, PlatformInput::MouseMove(MouseMoveEvent {
-                        position: self.position,
-                        pressed_button: self.pressed,
-                        modifiers,
-                    }));
+                    send_input(
+                        &mut send,
+                        window,
+                        PlatformInput::MouseMove(MouseMoveEvent {
+                            position: self.position,
+                            pressed_button: self.pressed,
+                            modifiers,
+                        }),
+                    );
                 }
                 Event::PointerButton {
                     pos,
@@ -70,30 +78,42 @@ impl InputTranslator {
                     if *pressed {
                         let click_count = self.click_count(button, position);
                         self.pressed = Some(button);
-                        send_input(&mut send, window, PlatformInput::MouseDown(MouseDownEvent {
-                            button,
-                            position: self.position,
-                            modifiers,
-                            click_count,
-                            first_mouse: false,
-                        }));
+                        send_input(
+                            &mut send,
+                            window,
+                            PlatformInput::MouseDown(MouseDownEvent {
+                                button,
+                                position: self.position,
+                                modifiers,
+                                click_count,
+                                first_mouse: false,
+                            }),
+                        );
                     } else {
                         self.pressed = None;
                         let click_count = self.last_click.map_or(1, |(_, _, _, count)| count);
-                        send_input(&mut send, window, PlatformInput::MouseUp(MouseUpEvent {
-                            button,
-                            position: self.position,
-                            modifiers,
-                            click_count,
-                        }));
+                        send_input(
+                            &mut send,
+                            window,
+                            PlatformInput::MouseUp(MouseUpEvent {
+                                button,
+                                position: self.position,
+                                modifiers,
+                                click_count,
+                            }),
+                        );
                     }
                 }
                 Event::PointerGone => {
-                    send_input(&mut send, window, PlatformInput::MouseExited(MouseExitEvent {
-                        position: self.position,
-                        pressed_button: self.pressed,
-                        modifiers,
-                    }));
+                    send_input(
+                        &mut send,
+                        window,
+                        PlatformInput::MouseExited(MouseExitEvent {
+                            position: self.position,
+                            pressed_button: self.pressed,
+                            modifiers,
+                        }),
+                    );
                 }
                 Event::MouseWheel {
                     unit,
@@ -114,12 +134,16 @@ impl InputTranslator {
                             ScrollDelta::Lines(Point::new(delta.x * 30.0, delta.y * 30.0))
                         }
                     };
-                    send_input(&mut send, window, PlatformInput::ScrollWheel(ScrollWheelEvent {
-                        position: self.position,
-                        delta,
-                        modifiers: convert_modifiers(*event_modifiers),
-                        touch_phase: TouchPhase::Moved,
-                    }));
+                    send_input(
+                        &mut send,
+                        window,
+                        PlatformInput::ScrollWheel(ScrollWheelEvent {
+                            position: self.position,
+                            delta,
+                            modifiers: convert_modifiers(*event_modifiers),
+                            touch_phase: TouchPhase::Moved,
+                        }),
+                    );
                 }
                 Event::Key {
                     key,
@@ -148,13 +172,21 @@ impl InputTranslator {
                         key_char,
                     };
                     if *pressed {
-                        send_input(&mut send, window, PlatformInput::KeyDown(KeyDownEvent {
-                            keystroke,
-                            is_held: *repeat,
-                            prefer_character_input: false,
-                        }));
+                        send_input(
+                            &mut send,
+                            window,
+                            PlatformInput::KeyDown(KeyDownEvent {
+                                keystroke,
+                                is_held: *repeat,
+                                prefer_character_input: false,
+                            }),
+                        );
                     } else {
-                        send_input(&mut send, window, PlatformInput::KeyUp(KeyUpEvent { keystroke }));
+                        send_input(
+                            &mut send,
+                            window,
+                            PlatformInput::KeyUp(KeyUpEvent { keystroke }),
+                        );
                     }
                 }
                 Event::Text(text) => send(HostEvent::Text {
@@ -270,6 +302,25 @@ fn key_name(key: Key) -> String {
         Key::Copy => "copy",
         Key::Cut => "cut",
         Key::Paste => "paste",
+        // egui's symbols for these are typographic (a minus sign, for one); keymaps write ASCII.
+        Key::Colon => ":",
+        Key::Comma => ",",
+        Key::Backslash => "\\",
+        Key::Slash => "/",
+        Key::Pipe => "|",
+        Key::Questionmark => "?",
+        Key::Exclamationmark => "!",
+        Key::OpenBracket => "[",
+        Key::CloseBracket => "]",
+        Key::OpenCurlyBracket => "{",
+        Key::CloseCurlyBracket => "}",
+        Key::Backtick => "`",
+        Key::Minus => "-",
+        Key::Period => ".",
+        Key::Plus => "+",
+        Key::Equals => "=",
+        Key::Semicolon => ";",
+        Key::Quote => "'",
         _ => return key.symbol_or_name().to_lowercase(),
     };
     name.to_owned()
@@ -285,6 +336,7 @@ mod tests {
         assert_eq!(key_name(Key::Num1), "1");
         assert_eq!(key_name(Key::F5), "f5");
         assert_eq!(key_name(Key::Minus), "-");
+        assert_eq!(key_name(Key::Backslash), "\\");
         assert_eq!(key_name(Key::PageDown), "pagedown");
     }
 

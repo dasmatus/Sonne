@@ -56,13 +56,31 @@ pub(crate) struct Frame {
 
 /// Something that happened on the host, for GPUI's thread.
 pub(crate) enum HostEvent {
-    Input { window: u64, input: gpui::PlatformInput },
+    Input {
+        window: u64,
+        input: gpui::PlatformInput,
+    },
     /// Text that no key event carried, such as a committed IME composition.
-    Text { window: u64, text: String },
-    Resize { window: u64, size: egui::Vec2, scale_factor: f32 },
-    Active { window: u64, active: bool },
-    Hovered { window: u64, hovered: bool },
-    CloseRequested { window: u64 },
+    Text {
+        window: u64,
+        text: String,
+    },
+    Resize {
+        window: u64,
+        size: egui::Vec2,
+        scale_factor: f32,
+    },
+    Active {
+        window: u64,
+        active: bool,
+    },
+    Hovered {
+        window: u64,
+        hovered: bool,
+    },
+    CloseRequested {
+        window: u64,
+    },
     /// The host's clipboard, read when the user pasted.
     Clipboard(String),
 }

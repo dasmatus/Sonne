@@ -4,7 +4,7 @@ use egui::epaint::{
 use egui::{Color32, Pos2, Rect, Shape, TextureId, pos2, vec2};
 use gpui::{
     AtlasTextureId, AtlasTile, BackgroundPaint, Bounds, ColorSpace, ContentMask, Corners, Hsla,
-    PaddedBool32, PrimitiveBatch, Scene, ScaledPixels, TransformationMatrix,
+    PaddedBool32, PrimitiveBatch, ScaledPixels, Scene, TransformationMatrix,
 };
 
 /// Where an atlas texture lives on the egui side, as the atlas reports it.
@@ -145,7 +145,8 @@ impl Converter {
     }
 
     fn corners(&self, corners: &Corners<ScaledPixels>) -> CornerRadius {
-        let radius = |value: ScaledPixels| (value.0 / self.scale_factor).round().clamp(0.0, 255.0) as u8;
+        let radius =
+            |value: ScaledPixels| (value.0 / self.scale_factor).round().clamp(0.0, 255.0) as u8;
         CornerRadius {
             nw: radius(corners.top_left),
             ne: radius(corners.top_right),
@@ -200,7 +201,10 @@ impl Converter {
         if widths.iter().all(|width| *width <= 0.0) {
             return;
         }
-        if widths.iter().all(|width| (width - widths[0]).abs() < f32::EPSILON) {
+        if widths
+            .iter()
+            .all(|width| (width - widths[0]).abs() < f32::EPSILON)
+        {
             self.push(
                 &quad.content_mask,
                 RectShape::stroke(
@@ -246,10 +250,14 @@ impl Converter {
         let radians = angle.to_radians();
         let direction = vec2(radians.sin(), -radians.cos());
         let center = rect.center();
-        let half_length = (rect.width() * direction.x.abs() + rect.height() * direction.y.abs()) / 2.0;
+        let half_length =
+            (rect.width() * direction.x.abs() + rect.height() * direction.y.abs()) / 2.0;
         let start = color(stops[0].color);
         let end = color(stops[1].color);
-        let (from, to) = (stops[0].percentage, stops[1].percentage.max(stops[0].percentage + 1e-3));
+        let (from, to) = (
+            stops[0].percentage,
+            stops[1].percentage.max(stops[0].percentage + 1e-3),
+        );
         let color_at = |corner: Pos2| {
             let along = if half_length > 0.0 {
                 ((corner - center).dot(direction) / half_length + 1.0) / 2.0
@@ -260,7 +268,12 @@ impl Converter {
             lerp_color(start, end, t)
         };
         let mut mesh = Mesh::default();
-        for corner in [rect.left_top(), rect.right_top(), rect.right_bottom(), rect.left_bottom()] {
+        for corner in [
+            rect.left_top(),
+            rect.right_top(),
+            rect.right_bottom(),
+            rect.left_bottom(),
+        ] {
             mesh.vertices.push(Vertex {
                 pos: corner,
                 uv: egui::epaint::WHITE_UV,
@@ -277,9 +290,8 @@ impl Converter {
             BackgroundPaint::LinearGradient { stops, .. } => {
                 lerp_color(color(stops[0].color), color(stops[1].color), 0.5)
             }
-            BackgroundPaint::PatternSlash(fill) | BackgroundPaint::Checkerboard { color: fill, .. } => {
-                color(fill).gamma_multiply(0.5)
-            }
+            BackgroundPaint::PatternSlash(fill)
+            | BackgroundPaint::Checkerboard { color: fill, .. } => color(fill).gamma_multiply(0.5),
         };
         let mut mesh = Mesh::default();
         for triangle in path.vertices.chunks_exact(3) {
@@ -298,8 +310,12 @@ impl Converter {
                 let curve = |t: f32| {
                     let inverse = 1.0 - t;
                     pos2(
-                        inverse * inverse * points[0].x + 2.0 * inverse * t * points[1].x + t * t * points[2].x,
-                        inverse * inverse * points[0].y + 2.0 * inverse * t * points[1].y + t * t * points[2].y,
+                        inverse * inverse * points[0].x
+                            + 2.0 * inverse * t * points[1].x
+                            + t * t * points[2].x,
+                        inverse * inverse * points[0].y
+                            + 2.0 * inverse * t * points[1].y
+                            + t * t * points[2].y,
                     )
                 };
                 for segment in 1..SEGMENTS - 1 {
@@ -356,8 +372,18 @@ impl Converter {
     ) {
         let rect = self.rect(bounds);
         let uv = uv_rect(tile, slot);
-        let corners = [rect.left_top(), rect.right_top(), rect.right_bottom(), rect.left_bottom()];
-        let uvs = [uv.left_top(), uv.right_top(), uv.right_bottom(), uv.left_bottom()];
+        let corners = [
+            rect.left_top(),
+            rect.right_top(),
+            rect.right_bottom(),
+            rect.left_bottom(),
+        ];
+        let uvs = [
+            uv.left_top(),
+            uv.right_top(),
+            uv.right_bottom(),
+            uv.left_bottom(),
+        ];
         let mut mesh = Mesh::with_texture(slot.id);
         for (corner, uv) in corners.into_iter().zip(uvs) {
             mesh.vertices.push(Vertex {
@@ -413,7 +439,12 @@ fn uv_rect(tile: &AtlasTile, slot: TextureSlot) -> Rect {
 pub(crate) fn color(color: Hsla) -> Color32 {
     let rgba = color.to_rgb();
     let channel = |value: f32| (value.clamp(0.0, 1.0) * 255.0).round() as u8;
-    Color32::from_rgba_unmultiplied(channel(rgba.r), channel(rgba.g), channel(rgba.b), channel(rgba.a))
+    Color32::from_rgba_unmultiplied(
+        channel(rgba.r),
+        channel(rgba.g),
+        channel(rgba.b),
+        channel(rgba.a),
+    )
 }
 
 fn lerp_color(start: Color32, end: Color32, t: f32) -> Color32 {
@@ -468,7 +499,10 @@ mod tests {
         scene.finish();
         let shapes = rects(&scene_to_shapes(&scene, 2.0, &|_| None));
         assert_eq!(shapes.len(), 2, "a fill and one uniform stroke");
-        assert_eq!(shapes[0].rect, Rect::from_min_size(pos2(10.0, 20.0), vec2(100.0, 50.0)));
+        assert_eq!(
+            shapes[0].rect,
+            Rect::from_min_size(pos2(10.0, 20.0), vec2(100.0, 50.0))
+        );
         assert_eq!(shapes[0].fill, Color32::RED);
         assert_eq!(shapes[1].stroke.width, 2.0);
     }
