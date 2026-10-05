@@ -2692,6 +2692,8 @@
     "x_ai": {
       "api_url": "https://api.x.ai/v1",
     },
+    // Read by the settings loader; Sonne never registers this provider.
+    "zed.dev": {},
   },
   "session": {
     // Whether or not to restore unsaved buffers on restart.

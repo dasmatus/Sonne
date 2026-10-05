@@ -991,50 +991,56 @@ impl TitleBar {
                 let is_custom = matches!(current_layout, WindowLayout::Custom(_));
 
                 ContextMenu::build(window, cx, |menu, _, _cx| {
-                    menu                    .action("Settings", zed_actions::OpenSettings.boxed_clone())
-                    .action("Keymap", Box::new(zed_actions::OpenKeymap))
-                    .action(
-                        "Themes…",
-                        zed_actions::theme_selector::Toggle::default().boxed_clone(),
-                    )
-                    .action(
-                        "Icon Themes…",
-                        zed_actions::icon_theme_selector::Toggle::default().boxed_clone(),
-                    )
-                    .action(
-                        "Extensions",
-                        zed_actions::Extensions::default().boxed_clone(),
-                    )
-                    .when(ai_enabled, |menu| {
-                        menu.separator()
-                            .submenu("Panel Layout", move |menu, _window, _cx| {
-                                menu.toggleable_entry(
-                                    "Classic",
-                                    is_editor,
-                                    IconPosition::Start,
-                                    Some(UseClassicLayout.boxed_clone()),
-                                    move |window, cx| {
-                                        window.dispatch_action(UseClassicLayout.boxed_clone(), cx);
-                                    },
-                                )
-                                .toggleable_entry(
-                                    "Agentic",
-                                    is_agent,
-                                    IconPosition::Start,
-                                    Some(UseAgenticLayout.boxed_clone()),
-                                    move |window, cx| {
-                                        window.dispatch_action(UseAgenticLayout.boxed_clone(), cx);
-                                    },
-                                )
-                                .when(is_custom, |menu| {
-                                    menu.item(
-                                        ContextMenuEntry::new("Custom")
-                                            .toggleable(IconPosition::Start, true)
-                                            .disabled(true),
+                    menu.action("Settings", zed_actions::OpenSettings.boxed_clone())
+                        .action("Keymap", Box::new(zed_actions::OpenKeymap))
+                        .action(
+                            "Themes…",
+                            zed_actions::theme_selector::Toggle::default().boxed_clone(),
+                        )
+                        .action(
+                            "Icon Themes…",
+                            zed_actions::icon_theme_selector::Toggle::default().boxed_clone(),
+                        )
+                        .action(
+                            "Extensions",
+                            zed_actions::Extensions::default().boxed_clone(),
+                        )
+                        .when(ai_enabled, |menu| {
+                            menu.separator()
+                                .submenu("Panel Layout", move |menu, _window, _cx| {
+                                    menu.toggleable_entry(
+                                        "Classic",
+                                        is_editor,
+                                        IconPosition::Start,
+                                        Some(UseClassicLayout.boxed_clone()),
+                                        move |window, cx| {
+                                            window.dispatch_action(
+                                                UseClassicLayout.boxed_clone(),
+                                                cx,
+                                            );
+                                        },
                                     )
+                                    .toggleable_entry(
+                                        "Agentic",
+                                        is_agent,
+                                        IconPosition::Start,
+                                        Some(UseAgenticLayout.boxed_clone()),
+                                        move |window, cx| {
+                                            window.dispatch_action(
+                                                UseAgenticLayout.boxed_clone(),
+                                                cx,
+                                            );
+                                        },
+                                    )
+                                    .when(is_custom, |menu| {
+                                        menu.item(
+                                            ContextMenuEntry::new("Custom")
+                                                .toggleable(IconPosition::Start, true)
+                                                .disabled(true),
+                                        )
+                                    })
                                 })
-                            })
-                    })
+                        })
                 })
                 .into()
             })

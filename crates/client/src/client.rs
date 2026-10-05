@@ -882,6 +882,12 @@ impl Client {
         try_provider: bool,
         cx: &AsyncApp,
     ) -> Result<Credentials> {
+        // Sonne has no zed.dev account: signing in would hand the user to Zed's
+        // servers. Tests keep the real flow because they sign in to a fake server.
+        if cfg!(not(any(test, feature = "test-support"))) {
+            return Err(anyhow!("Sonne does not sign in to zed.dev"));
+        }
+
         let is_reauthenticating = if self.status().borrow().is_signed_out() {
             self.set_status(Status::Authenticating, cx);
             false
