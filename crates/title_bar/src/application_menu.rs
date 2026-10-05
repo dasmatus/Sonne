@@ -525,7 +525,7 @@ mod tests {
 
         cx.update(|cx| {
             cx.set_menus(vec![
-                Menu::new("Zed").items([MenuItem::action(
+                Menu::new("Sonne").items([MenuItem::action(
                     "Settings",
                     OpenApplicationMenu(String::new()),
                 )]),

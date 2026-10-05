@@ -282,7 +282,7 @@ repl = { workspace = true, features = ["test-support"] }
 [package.metadata.bundle-dev]
 icon = ["resources/app-icon-dev@2x.png", "resources/app-icon-dev.png"]
 identifier = "io.github.dasmatus.Sonne-Dev"
-name = "Zed Dev"
+name = "Sonne Dev"
 osx_minimum_system_version = "10.15.7"
 osx_info_plist_exts = ["resources/info/*"]
 osx_url_schemes = ["zed"]
@@ -290,7 +290,7 @@ osx_url_schemes = ["zed"]
 [package.metadata.bundle-nightly]
 icon = ["resources/app-icon-nightly@2x.png", "resources/app-icon-nightly.png"]
 identifier = "io.github.dasmatus.Sonne-Nightly"
-name = "Zed Nightly"
+name = "Sonne Nightly"
 osx_minimum_system_version = "10.15.7"
 osx_info_plist_exts = ["resources/info/*"]
 osx_url_schemes = ["zed"]
@@ -298,7 +298,7 @@ osx_url_schemes = ["zed"]
 [package.metadata.bundle-preview]
 icon = ["resources/app-icon-preview@2x.png", "resources/app-icon-preview.png"]
 identifier = "io.github.dasmatus.Sonne-Preview"
-name = "Zed Preview"
+name = "Sonne Preview"
 osx_minimum_system_version = "10.15.7"
 osx_info_plist_exts = ["resources/info/*"]
 osx_url_schemes = ["zed"]
@@ -306,7 +306,7 @@ osx_url_schemes = ["zed"]
 [package.metadata.bundle-stable]
 icon = ["resources/app-icon@2x.png", "resources/app-icon.png"]
 identifier = "io.github.dasmatus.Sonne"
-name = "Zed"
+name = "Sonne"
 osx_minimum_system_version = "10.15.7"
 osx_info_plist_exts = ["resources/info/*"]
 osx_url_schemes = ["zed"]
