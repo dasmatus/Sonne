@@ -765,7 +765,7 @@ impl Sonne {
                 .and_then(|id| id.ok_or_else(|| anyhow::anyhow!("the project was deleted"))),
             None => self
                 .store
-                .new_project(&setup.display_name(), vec![folder.clone()])
+                .new_project(&setup.display_name(), vec![folder])
                 .and_then(|project| {
                     self.store.update_projects(|projects| {
                         if let Some(stored) =
@@ -826,8 +826,10 @@ impl Sonne {
         });
         ui.add_space(4.0);
         if self.view == CenterView::Code {
-            self.code
-                .set_root(self.project().and_then(|project| project.folders.first().cloned()));
+            self.code.set_root(
+                self.project()
+                    .and_then(|project| project.folders.first().cloned()),
+            );
             let result = self.code.show(ui, tokens);
             self.report(result);
             return;

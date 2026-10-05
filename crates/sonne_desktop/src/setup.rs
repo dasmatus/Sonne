@@ -478,11 +478,7 @@ impl AppSetup {
         if self.flatpak {
             let runtime = metadata.flatpak_runtime;
             let id = metadata.flatpak_id.trim();
-            let mut finish_args = vec![
-                "--socket=wayland",
-                "--socket=fallback-x11",
-                "--share=ipc",
-            ];
+            let mut finish_args = vec!["--socket=wayland", "--socket=fallback-x11", "--share=ipc"];
             if metadata.flatpak_gpu {
                 finish_args.push("--device=dri");
             }
@@ -601,71 +597,85 @@ impl SetupForm {
 
     pub fn show(&mut self, ui: &mut Ui, tokens: &Tokens) -> Option<SetupAction> {
         let mut action = None;
-        ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
-            ui.set_max_width(720.0);
-            ui.horizontal(|ui| {
-                let title = if self.project_id.is_some() {
-                    "Set up the project's app"
-                } else {
-                    "New project"
-                };
-                ui.label(typography::h3(tokens, title));
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if ui
-                        .add(
-                            Button::new("Cancel")
-                                .variant(ButtonVariant::Ghost)
-                                .size(ButtonSize::Sm),
-                        )
-                        .clicked()
-                    {
-                        action = Some(SetupAction::Cancel);
-                    }
-                });
-            });
-            ui.add_space(8.0);
-            self.stepper(ui, tokens);
-            ui.add_space(12.0);
-            Card::new().show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                match self.step {
-                    0 => self.kind_step(ui, tokens),
-                    1 => self.language_step(ui, tokens),
-                    2 => self.metadata_step(ui, tokens),
-                    3 => self.description_step(ui, tokens),
-                    _ => self.prompt_step(ui, tokens),
-                }
-            });
-            ui.add_space(12.0);
-            let problem = self.setup.problem(self.step.min(STEPS.len() - 2));
-            if let Some(problem) = &problem {
-                ui.label(typography::small(tokens, problem).color(tokens.destructive));
-                ui.add_space(4.0);
-            }
-            ui.horizontal(|ui| {
-                if self.step > 0
-                    && ui
-                        .add(Button::new("Back").variant(ButtonVariant::Outline))
-                        .clicked()
-                {
-                    self.go_to(self.step - 1);
-                }
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if self.step + 1 < STEPS.len() {
+        let width = ui.available_width().min(720.0);
+        let bare = egui::Frame::new().inner_margin(egui::Margin::symmetric(0, 6));
+        egui::Panel::top("setup-steps").frame(bare).show(ui, |ui| {
+            column(ui, width, |ui| {
+                ui.horizontal(|ui| {
+                    let title = if self.project_id.is_some() {
+                        "Set up the project's app"
+                    } else {
+                        "New project"
+                    };
+                    ui.label(typography::h3(tokens, title));
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         if ui
-                            .add(Button::new("Next").enabled(problem.is_none()))
+                            .add(
+                                Button::new("Cancel")
+                                    .variant(ButtonVariant::Ghost)
+                                    .size(ButtonSize::Sm),
+                            )
                             .clicked()
                         {
-                            self.go_to(self.step + 1);
+                            action = Some(SetupAction::Cancel);
                         }
-                    } else if ui
-                        .add(
-                            Button::new("Create project and start")
-                                .enabled(problem.is_none() && !self.prompt.trim().is_empty()),
-                        )
-                        .clicked()
-                    {
-                        action = Some(SetupAction::Start);
+                    });
+                });
+                ui.add_space(8.0);
+                self.stepper(ui, tokens);
+            });
+        });
+        // The buttons stay put below the card, however tall a step grows.
+        let problem = self.setup.problem(self.step.min(STEPS.len() - 2));
+        egui::Panel::bottom("setup-buttons")
+            .frame(bare)
+            .show(ui, |ui| {
+                column(ui, width, |ui| {
+                    if let Some(problem) = &problem {
+                        ui.label(typography::small(tokens, problem).color(tokens.destructive));
+                        ui.add_space(4.0);
+                    }
+                    ui.horizontal(|ui| {
+                        if self.step > 0
+                            && ui
+                                .add(Button::new("Back").variant(ButtonVariant::Outline))
+                                .clicked()
+                        {
+                            self.go_to(self.step - 1);
+                        }
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if self.step + 1 < STEPS.len() {
+                                if ui
+                                    .add(Button::new("Next").enabled(problem.is_none()))
+                                    .clicked()
+                                {
+                                    self.go_to(self.step + 1);
+                                }
+                            } else if ui
+                                .add(
+                                    Button::new("Create project and start").enabled(
+                                        problem.is_none() && !self.prompt.trim().is_empty(),
+                                    ),
+                                )
+                                .clicked()
+                            {
+                                action = Some(SetupAction::Start);
+                            }
+                        });
+                    });
+                });
+            });
+        egui::CentralPanel::no_frame().show(ui, |ui| {
+            ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+                ui.set_max_width(width);
+                Card::new().show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    match self.step {
+                        0 => self.kind_step(ui, tokens),
+                        1 => self.language_step(ui, tokens),
+                        2 => self.metadata_step(ui, tokens),
+                        3 => self.description_step(ui, tokens),
+                        _ => self.prompt_step(ui, tokens),
                     }
                 });
             });
@@ -684,11 +694,10 @@ impl SetupForm {
                 } else {
                     ButtonVariant::Ghost
                 };
-                let mark = if index < self.step { "✓" } else { "" };
-                let text = format!("{} {title} {mark}", index + 1);
+                let text = format!("{} {title}", index + 1);
                 if ui
                     .add(
-                        Button::new(text.trim_end())
+                        Button::new(text)
                             .variant(variant)
                             .size(ButtonSize::Sm)
                             .enabled(index <= reachable),
@@ -735,14 +744,15 @@ impl SetupForm {
             "These are the languages mcsapi supports. Rust is strongly recommended.",
         ));
         ui.add_space(8.0);
-        let labels: Vec<&str> = Language::ALL.iter().map(|language| language.label()).collect();
+        let labels: Vec<&str> = Language::ALL
+            .iter()
+            .map(|language| language.label())
+            .collect();
         let mut selected = Language::ALL
             .iter()
             .position(|language| *language == self.setup.language)
             .unwrap_or(0);
-        if ui
-            .add(RadioGroup::new(&mut selected, &labels))
-            .changed()
+        if ui.add(RadioGroup::new(&mut selected, &labels)).changed()
             && let Some(language) = Language::ALL.get(selected)
         {
             self.setup.set_language(*language);
@@ -901,7 +911,9 @@ impl SetupForm {
         ui.add_space(8.0);
         ui.add(
             Textarea::new(&mut self.setup.description)
-                .placeholder("A todo list with due dates. Items can be filtered by done, today and overdue…")
+                .placeholder(
+                    "A todo list with due dates. Items can be filtered by done, today and overdue…",
+                )
                 .rows(10),
         );
     }
@@ -932,13 +944,20 @@ impl SetupForm {
             "This is what the agent gets as the project's first message. Edit it freely.",
         ));
         ui.add_space(8.0);
-        if ui
-            .add(Textarea::new(&mut self.prompt).rows(22))
-            .changed()
-        {
+        if ui.add(Textarea::new(&mut self.prompt).rows(22)).changed() {
             self.prompt_edited = true;
         }
     }
+}
+
+/// A column `width` wide at the left of `ui`, so the steps, the card and
+/// the buttons line up.
+fn column(ui: &mut Ui, width: f32, content: impl FnOnce(&mut Ui)) {
+    ui.allocate_ui_with_layout(
+        egui::vec2(width, 0.0),
+        Layout::top_down(Align::Min),
+        content,
+    );
 }
 
 fn hint(ui: &mut Ui, tokens: &Tokens, text: &str) {

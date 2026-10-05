@@ -9,7 +9,9 @@ use std::{
 
 use anyhow::{Context as _, Result};
 use egui::{Align, Layout, RichText, ScrollArea, TextEdit, Ui};
-use mcsapi_components::{Badge, BadgeVariant, Button, ButtonSize, ButtonVariant, Tokens, typography};
+use mcsapi_components::{
+    Badge, BadgeVariant, Button, ButtonSize, ButtonVariant, Tokens, typography,
+};
 
 /// Folders nobody reads by hand, and which can hold more files than the tree
 /// should list.
@@ -70,9 +72,12 @@ impl CodeView {
             .size_range(140.0..=420.0)
             .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(0, 4)))
             .show(ui, |ui| {
-                ui.label(
-                    typography::small(tokens, root.display().to_string())
-                        .color(tokens.muted_foreground),
+                ui.add(
+                    egui::Label::new(
+                        typography::small(tokens, root.display().to_string())
+                            .color(tokens.muted_foreground),
+                    )
+                    .truncate(),
                 );
                 ui.add_space(4.0);
                 ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
@@ -111,8 +116,8 @@ impl CodeView {
             let expanded = self.expanded.contains(&path);
             let selected = self.open.as_ref().is_some_and(|open| open.path == path);
             let icon = match (is_dir, expanded) {
-                (true, true) => "▾",
-                (true, false) => "▸",
+                (true, true) => "⏷",
+                (true, false) => "⏵",
                 (false, _) => " ",
             };
             let text = RichText::new(format!("{icon} {name}")).color(if selected {
@@ -191,9 +196,8 @@ impl CodeView {
                 ui.add(Badge::new("Unsaved").variant(BadgeVariant::Secondary));
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let shortcut = ui.input_mut(|input| {
-                    input.consume_key(egui::Modifiers::COMMAND, egui::Key::S)
-                });
+                let shortcut =
+                    ui.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
                 save = ui
                     .add(
                         Button::new("Save")
@@ -300,7 +304,11 @@ mod tests {
         fs::write(&path, [0x89, 0x50, 0xff, 0xfe])?;
         let mut view = CodeView::default();
         view.open_file(path)?;
-        assert!(view.open.as_ref().is_some_and(|open| open.read_only.is_some()));
+        assert!(
+            view.open
+                .as_ref()
+                .is_some_and(|open| open.read_only.is_some())
+        );
         assert!(!view.has_unsaved_changes());
         Ok(())
     }
