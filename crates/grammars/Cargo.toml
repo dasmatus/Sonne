@@ -36,6 +36,10 @@ tree-sitter-regex = { workspace = true, optional = true }
 tree-sitter-rust = { workspace = true, optional = true }
 tree-sitter-typescript = { workspace = true, optional = true }
 tree-sitter-yaml = { workspace = true, optional = true }
+tree-sitter-language = { workspace = true, optional = true }
+
+[build-dependencies]
+cc.workspace = true
 
 [features]
 load-grammars = [
@@ -57,5 +61,6 @@ load-grammars = [
     "tree-sitter-rust",
     "tree-sitter-typescript",
     "tree-sitter-yaml",
+    "tree-sitter-language",
 ]
 test-support = ["load-grammars", "tree-sitter/wasm"]

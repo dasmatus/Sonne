@@ -42,7 +42,21 @@ pub fn native_grammars() -> Vec<(&'static str, tree_sitter::Language)> {
         ),
         ("yaml", tree_sitter_yaml::LANGUAGE.into()),
         ("gitcommit", tree_sitter_gitcommit::LANGUAGE.into()),
+        ("rhai", rhai::LANGUAGE.into()),
     ]
+}
+
+#[cfg(feature = "load-grammars")]
+mod rhai {
+    use tree_sitter_language::LanguageFn;
+
+    unsafe extern "C" {
+        fn tree_sitter_rhai() -> *const ();
+    }
+
+    // SAFETY: `tree_sitter_rhai` is the generated parser's entry point, compiled
+    // from `vendor/tree-sitter-rhai` by `build.rs`.
+    pub const LANGUAGE: LanguageFn = unsafe { LanguageFn::from_raw(tree_sitter_rhai) };
 }
 
 /// Load and parse the `config.toml` for a given language name.
