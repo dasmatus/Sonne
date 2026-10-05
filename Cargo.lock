@@ -16886,6 +16886,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sonne_preview",
+ "sonne_setup",
  "tempfile",
  "ureq",
  "uuid",
@@ -16903,6 +16904,16 @@ dependencies = [
  "serde",
  "wasmtime",
  "wasmtime-wasi",
+]
+
+[[package]]
+name = "sonne_setup"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dirs",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

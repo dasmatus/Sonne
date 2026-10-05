@@ -797,7 +797,7 @@ impl Sonne {
                 self.page = Page::NewChat;
                 return;
             };
-            match form.show(ui, tokens) {
+            match setup::show(&mut form, ui, tokens) {
                 Some(SetupAction::Cancel) => self.page = Page::NewChat,
                 Some(SetupAction::Start) => self.finish_setup(form),
                 None => self.setup = Some(form),
