@@ -18,6 +18,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sonne_preview::PreviewSource;
 
+use crate::setup::AppSetup;
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Project {
     pub id: String,
@@ -33,6 +35,10 @@ pub struct Project {
     pub permission_mode: PermissionMode,
     #[serde(default)]
     pub mcp_servers: Vec<McpServer>,
+    /// The answers from the project setup wizard, when the project was set up
+    /// with it.
+    #[serde(default)]
+    pub app: Option<AppSetup>,
     pub created: DateTime<Utc>,
 }
 
@@ -299,6 +305,7 @@ impl Store {
             folders,
             permission_mode: PermissionMode::default(),
             mcp_servers: Vec::new(),
+            app: None,
             created: Utc::now(),
         };
         self.update_projects(|projects| projects.push(project.clone()))?;
