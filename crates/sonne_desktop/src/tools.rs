@@ -46,7 +46,7 @@ pub fn definitions() -> Value {
             "name": "preview_new",
             "description": "Create a new Rust app that Sonne can show in its preview pane. It draws with egui through sonne_preview::serve and builds for Linux and for wasm32-wasip2. Edit src/main.rs afterwards, then call preview_build.",
             "inputSchema": {"type": "object", "required": ["dir", "name"], "properties": {
-                "dir": {"type": "string", "description": "Absolute path of the new app's folder; must not exist yet"},
+                "dir": {"type": "string", "description": "Absolute path of the new app's folder; must be empty or not exist yet"},
                 "name": {"type": "string", "description": "Cargo package name, such as todo-app"}
             }}
         },
@@ -331,8 +331,10 @@ fn guest_source() -> String {
 }
 
 fn scaffold(dir: &Path, name: &str) -> Result<String> {
-    if dir.exists() {
-        bail!("{} already exists", dir.display());
+    // An empty folder is fine: the setup wizard creates the app's folder
+    // before the agent scaffolds into it.
+    if dir.exists() && std::fs::read_dir(dir)?.next().is_some() {
+        bail!("{} already exists and is not empty", dir.display());
     }
     if name.is_empty()
         || !name
@@ -469,9 +471,12 @@ mod tests {
     }
 
     #[test]
-    fn scaffold_refuses_existing_folders_and_bad_names() -> Result<()> {
+    fn scaffold_refuses_folders_with_files_and_bad_names() -> Result<()> {
         let dir = tempfile::tempdir()?;
+        std::fs::write(dir.path().join("notes.txt"), "")?;
         assert!(scaffold(dir.path(), "app").is_err());
+        std::fs::create_dir(dir.path().join("empty"))?;
+        scaffold(&dir.path().join("empty"), "empty")?;
         assert!(scaffold(&dir.path().join("x"), "bad name").is_err());
         scaffold(&dir.path().join("app"), "app")?;
         assert!(

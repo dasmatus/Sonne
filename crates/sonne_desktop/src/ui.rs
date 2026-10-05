@@ -19,7 +19,7 @@ use chrono::Utc;
 use egui::{Align, Color32, Layout, RichText, ScrollArea, Ui};
 use mcsapi_components::{
     Badge, BadgeVariant, Button, ButtonSize, ButtonVariant, Card, Empty, Input, Select, Spinner,
-    Switch, Tabs, Textarea, Toaster, Tokens, toast, typography,
+    Switch, Tabs, Textarea, Toaster, ToggleGroup, Tokens, toast, typography,
 };
 use mcsapi_ui::Theme;
 use serde_json::{Value, json};
@@ -27,9 +27,11 @@ use sonne_preview::{Preview, PreviewSource, PreviewStatus, PreviewTheme};
 
 use crate::{
     agent::{self, AgentEvent, Turn},
+    code_view::CodeView,
     forge::{self, ForgeRepo, PullRequest},
     mcp::{self, ToolInfo},
     routines,
+    setup::{AppSetup, SetupAction, SetupForm},
     store::{
         Artifact, ArtifactKind, Chat, Entry, McpServer, McpTransport, PermissionMode, Project,
         Role, Routine, Store,
@@ -47,7 +49,18 @@ enum Page {
     Project(String),
     Routine(String),
     Artifact(String),
+    Setup,
 }
+
+/// What the middle of the window shows: the agent's conversation, or the
+/// project's code.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CenterView {
+    Chat = 0,
+    Code = 1,
+}
+
+const CENTER_VIEWS: [&str; 2] = ["Chat", "Code"];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RightTab {
@@ -110,6 +123,9 @@ pub struct Sonne {
     new_server_name: String,
     new_server_target: String,
     new_folder: String,
+    setup: Option<SetupForm>,
+    view: CenterView,
+    code: CodeView,
     context: Option<egui::Context>,
     jobs: (mpsc::Sender<Job>, mpsc::Receiver<Job>),
     control: Option<mpsc::Receiver<ControlRequest>>,
@@ -141,6 +157,9 @@ impl Sonne {
             new_server_name: String::new(),
             new_server_target: String::new(),
             new_folder: String::new(),
+            setup: None,
+            view: CenterView::Chat,
+            code: CodeView::default(),
             context: None,
             jobs: mpsc::channel(),
             control: None,
@@ -579,15 +598,7 @@ impl Sonne {
 
         ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
             if section_header(ui, tokens, "Projects") {
-                let name = format!("Project {}", self.projects.len() + 1);
-                match self.store.new_project(&name, Vec::new()) {
-                    Ok(project) => {
-                        self.project_id = Some(project.id.clone());
-                        self.page = Page::Project(project.id);
-                        self.reload();
-                    }
-                    Err(error) => self.error = Some(format!("{error:#}")),
-                }
+                self.open_setup(AppSetup::default(), None);
             }
             if self.projects.is_empty() {
                 ui.label(typography::muted(
@@ -716,8 +727,113 @@ impl Sonne {
         });
     }
 
+    fn open_setup(&mut self, setup: AppSetup, project_id: Option<String>) {
+        self.setup = Some(SetupForm::new(setup, project_id));
+        self.page = Page::Setup;
+        self.view = CenterView::Chat;
+    }
+
+    /// Creates the wizard's project, or updates the one it set up again, and
+    /// sends its prompt as the project's first chat.
+    fn finish_setup(&mut self, form: SetupForm) {
+        let setup = form.setup;
+        let folder = setup.folder();
+        if let Err(error) = std::fs::create_dir_all(&folder) {
+            self.error = Some(format!("could not create {}: {error}", folder.display()));
+            self.setup = Some(SetupForm { setup, ..form });
+            return;
+        }
+        let result = match &form.project_id {
+            Some(id) => self
+                .store
+                .update_projects(|projects| {
+                    let project = projects.iter_mut().find(|project| &project.id == id)?;
+                    // Instructions the user wrote themselves stay; ones the
+                    // wizard wrote follow the new answers.
+                    let generated = project.app.as_ref().map(AppSetup::instructions);
+                    if project.instructions.trim().is_empty()
+                        || Some(&project.instructions) == generated.as_ref()
+                    {
+                        project.instructions = setup.instructions();
+                    }
+                    if !project.folders.contains(&folder) {
+                        project.folders.insert(0, folder.clone());
+                    }
+                    project.app = Some(setup.clone());
+                    Some(project.id.clone())
+                })
+                .and_then(|id| id.ok_or_else(|| anyhow::anyhow!("the project was deleted"))),
+            None => self
+                .store
+                .new_project(&setup.display_name(), vec![folder.clone()])
+                .and_then(|project| {
+                    self.store.update_projects(|projects| {
+                        if let Some(stored) =
+                            projects.iter_mut().find(|stored| stored.id == project.id)
+                        {
+                            stored.instructions = setup.instructions();
+                            stored.app = Some(setup.clone());
+                        }
+                    })?;
+                    Ok(project.id)
+                }),
+        };
+        match result {
+            Ok(id) => {
+                self.reload();
+                self.project_id = Some(id);
+                self.pulls = None;
+                self.page = Page::NewChat;
+                self.composer = form.prompt;
+                self.send();
+            }
+            Err(error) => self.error = Some(format!("{error:#}")),
+        }
+    }
+
     fn center(&mut self, ui: &mut Ui, tokens: &Tokens) {
+        if self.page == Page::Setup {
+            let Some(mut form) = self.setup.take() else {
+                self.page = Page::NewChat;
+                return;
+            };
+            match form.show(ui, tokens) {
+                Some(SetupAction::Cancel) => self.page = Page::NewChat,
+                Some(SetupAction::Start) => self.finish_setup(form),
+                None => self.setup = Some(form),
+            }
+            return;
+        }
+        ui.horizontal(|ui| {
+            let mut selected = Some(self.view as usize);
+            let unsaved = self.code.has_unsaved_changes();
+            if ui
+                .add(ToggleGroup::new(&mut selected, &CENTER_VIEWS))
+                .on_hover_text("Switch between the agent's chat and the project's code")
+                .changed()
+            {
+                // A second click on the pressed item unpresses it; the view
+                // stays as it was.
+                self.view = match selected {
+                    Some(1) => CenterView::Code,
+                    Some(_) => CenterView::Chat,
+                    None => self.view,
+                };
+            }
+            if unsaved && self.view == CenterView::Chat {
+                ui.add(Badge::new("Unsaved code").variant(BadgeVariant::Secondary));
+            }
+        });
+        ui.add_space(4.0);
+        if self.view == CenterView::Code {
+            self.code
+                .set_root(self.project().and_then(|project| project.folders.first().cloned()));
+            let result = self.code.show(ui, tokens);
+            self.report(result);
+            return;
+        }
         match self.page.clone() {
+            Page::Setup => {}
             Page::NewChat => self.new_chat_page(ui, tokens),
             Page::Chat(id) => self.chat_page(ui, tokens, &id),
             Page::Project(id) => self.project_page(ui, tokens, &id),
@@ -783,9 +899,20 @@ impl Sonne {
                     project.name
                 ),
                 Some(project) => format!("Working in {}", project.folders[0].display()),
-                None => "Create a project in the left column to start.".to_owned(),
+                None => "Set up a project to start.".to_owned(),
             };
             ui.label(typography::muted(tokens, hint));
+            ui.add_space(8.0);
+            if ui
+                .add(
+                    Button::new("Set up a new app")
+                        .variant(ButtonVariant::Outline)
+                        .size(ButtonSize::Sm),
+                )
+                .clicked()
+            {
+                self.open_setup(AppSetup::default(), None);
+            }
         });
         ui.add_space(16.0);
         ui.horizontal(|ui| {
@@ -952,6 +1079,33 @@ impl Sonne {
                     } else {
                         self.error = Some(format!("{} is not a folder", folder.display()));
                     }
+                }
+            });
+            ui.add_space(8.0);
+            ui.label("App");
+            ui.horizontal(|ui| {
+                let summary = match &project.app {
+                    Some(app) => format!("{} in {}", app.display_name(), app.folder().display()),
+                    None => "Not set up with the wizard.".to_owned(),
+                };
+                ui.label(typography::muted(tokens, summary));
+                let label = if project.app.is_some() {
+                    "Edit setup"
+                } else {
+                    "Set up"
+                };
+                if ui
+                    .add(
+                        Button::new(label)
+                            .variant(ButtonVariant::Secondary)
+                            .size(ButtonSize::Sm),
+                    )
+                    .clicked()
+                {
+                    self.open_setup(
+                        project.app.clone().unwrap_or_default(),
+                        Some(project.id.clone()),
+                    );
                 }
             });
             ui.add_space(8.0);

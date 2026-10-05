@@ -8,9 +8,11 @@
 //! next to the forge's pull or merge requests and the project's MCP servers.
 
 pub mod agent;
+mod code_view;
 pub mod forge;
 pub mod mcp;
 pub mod routines;
+pub mod setup;
 pub mod store;
 pub mod tools;
 mod ui;
