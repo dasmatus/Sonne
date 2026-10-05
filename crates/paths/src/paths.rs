@@ -15,7 +15,10 @@ pub const EDITORCONFIG_NAME: &str = ".editorconfig";
 /// and state directory paths.
 ///
 /// Forks should change this to avoid colliding with Zed's user data.
-pub const APP_NAME: &str = "Sonne";
+// It has to match the editor's binary name (main.rs checks), and the binary is
+// still `zed`: the CLI, the bundle scripts and the Nix and Flatpak builds all
+// look for it by that name, so both change together or not at all.
+pub const APP_NAME: &str = "Zed";
 
 /// Lowercased form of [`APP_NAME`], for use in XDG-style paths on
 /// Linux/FreeBSD and the macOS `~/.config` fallback.
