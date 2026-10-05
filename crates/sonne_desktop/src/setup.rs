@@ -68,9 +68,8 @@ pub fn show(form: &mut SetupForm, ui: &mut Ui, tokens: &Tokens) -> Option<SetupA
                             }
                         } else if ui
                             .add(
-                                Button::new("Create project and start").enabled(
-                                    problem.is_none() && !form.prompt.trim().is_empty(),
-                                ),
+                                Button::new("Create project and start")
+                                    .enabled(problem.is_none() && !form.prompt.trim().is_empty()),
                             )
                             .clicked()
                         {
@@ -178,11 +177,12 @@ fn language_step(form: &mut SetupForm, ui: &mut Ui, tokens: &Tokens) {
         ui.label(typography::muted(tokens, language.note()));
     } else {
         ui.add(
-            Alert::new(format!("{} is not the recommended choice", language.name()))
-                .description(format!(
+            Alert::new(format!("{} is not the recommended choice", language.name())).description(
+                format!(
                     "{} Rust gets all of that and is what Sonne's tools are built around.",
                     language.note()
-                )),
+                ),
+            ),
         );
     }
 }
@@ -315,9 +315,7 @@ fn metadata_step(form: &mut SetupForm, ui: &mut Ui, tokens: &Tokens) {
             }
         });
         field(ui, tokens, "Web app", |ui| {
-            ui.add(
-                Checkbox::new(&mut metadata.pwa).label("Also a PWA, with a web app manifest"),
-            );
+            ui.add(Checkbox::new(&mut metadata.pwa).label("Also a PWA, with a web app manifest"));
         });
         if metadata.pwa {
             let display_hint = form.setup.display_name();

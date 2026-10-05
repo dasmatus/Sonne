@@ -5,13 +5,16 @@
 use std::sync::Arc;
 
 use agent_client_protocol::schema::v1 as acp;
+use editor::{Editor, EditorElement, EditorEvent, EditorStyle};
 use gpui::{
     DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle, Subscription,
-    WeakEntity, prelude::*,
+    TextStyle, WeakEntity, prelude::*,
 };
+use settings::Settings as _;
 use sonne_setup::{
     AppSetup, FlatpakRuntime, Language, Metadata, PwaDisplay, STEPS, SetupForm, WasmKind,
 };
+use theme_settings::ThemeSettings;
 use ui::{
     Checkbox, ChoiceCard, KeyBinding, Modal, ModalFooter, ModalHeader, Section, SectionHeader,
     ToggleState, WithScrollbar, prelude::*,
@@ -119,8 +122,8 @@ impl Field {
 pub struct AppSetupModal {
     form: SetupForm,
     fields: Vec<(Field, Entity<InputField>)>,
-    description: Entity<InputField>,
-    prompt: Entity<InputField>,
+    description: Entity<Editor>,
+    prompt: Entity<Editor>,
     workspace: WeakEntity<Workspace>,
     focus_handle: FocusHandle,
     scroll_handle: ScrollHandle,
@@ -144,22 +147,23 @@ impl AppSetupModal {
     ) -> Self {
         let mut form = SetupForm::new(setup, None);
         let mut subscriptions = Vec::new();
-        let mut watch = |input: &Entity<InputField>, window: &mut Window, cx: &mut Context<Self>| {
-            let this = cx.weak_entity();
-            subscriptions.push(editor(input, cx).subscribe(
-                Box::new(move |event, _window, cx| {
-                    if event == ErasedEditorEvent::BufferEdited {
-                        this.update(cx, |this, cx| {
-                            this.read_inputs(cx);
-                            cx.notify();
-                        })
-                        .log_err();
-                    }
-                }),
-                window,
-                cx,
-            ));
-        };
+        let mut watch =
+            |input: &Entity<InputField>, window: &mut Window, cx: &mut Context<Self>| {
+                let this = cx.weak_entity();
+                subscriptions.push(editor(input, cx).subscribe(
+                    Box::new(move |event, _window, cx| {
+                        if event == ErasedEditorEvent::BufferEdited {
+                            this.update(cx, |this, cx| {
+                                this.read_inputs(cx);
+                                cx.notify();
+                            })
+                            .log_err();
+                        }
+                    }),
+                    window,
+                    cx,
+                ));
+            };
 
         let fields: Vec<_> = Field::ALL
             .into_iter()
@@ -176,19 +180,32 @@ impl AppSetupModal {
             })
             .collect();
 
+        // InputField is one line; the two long answers are Zed's own
+        // auto-height editor, as in its other modals.
         let description = cx.new(|cx| {
-            InputField::new(
+            let mut editor = Editor::auto_height(4, 12, window, cx);
+            editor.set_placeholder_text(
+                "A to-do list that syncs between my phone and my laptop…",
                 window,
                 cx,
-                "A to-do list that syncs between my phone and my laptop…",
-            )
+            );
+            editor
         });
-        editor(&description, cx).set_multiline(Some(12), window, cx);
-        watch(&description, window, cx);
-
-        let prompt = cx.new(|cx| InputField::new(window, cx, ""));
-        editor(&prompt, cx).set_multiline(Some(18), window, cx);
-        watch(&prompt, window, cx);
+        let prompt = cx.new(|cx| Editor::auto_height(8, 18, window, cx));
+        subscriptions.push(
+            cx.subscribe(&description, |this, _, event: &EditorEvent, cx| {
+                if matches!(event, EditorEvent::BufferEdited) {
+                    this.read_inputs(cx);
+                    cx.notify();
+                }
+            }),
+        );
+        subscriptions.push(cx.subscribe(&prompt, |this, _, event: &EditorEvent, cx| {
+            if matches!(event, EditorEvent::BufferEdited) {
+                this.read_prompt(cx);
+                cx.notify();
+            }
+        }));
 
         Self {
             form,
@@ -209,6 +226,9 @@ impl AppSetupModal {
             *field.value(&mut self.form.setup.metadata) = input.read(cx).text(cx);
         }
         self.form.setup.description = self.description.read(cx).text(cx);
+    }
+
+    fn read_prompt(&mut self, cx: &App) {
         let prompt = self.prompt.read(cx).text(cx);
         // Writing the composed prompt into the field reports an edit too;
         // only text that differs from it is the user's.
@@ -223,8 +243,24 @@ impl AppSetupModal {
         self.error = None;
         self.form.go_to(step);
         if step == STEPS.len() - 1 {
-            editor(&self.prompt, cx).set_text(&self.form.prompt, window, cx);
+            let prompt = self.form.prompt.clone();
+            self.prompt
+                .update(cx, |editor, cx| editor.set_text(prompt, window, cx));
         }
+        // Steps that are typed into start in their first field.
+        let first_field = match step {
+            2 => self
+                .fields
+                .first()
+                .map(|(_, input)| editor(input, cx).focus_handle(cx)),
+            3 => Some(self.description.focus_handle(cx)),
+            4 => Some(self.prompt.focus_handle(cx)),
+            _ => None,
+        };
+        // The step's fields are drawn on the next frame; focusing one before
+        // that is lost.
+        let handle = first_field.unwrap_or_else(|| self.focus_handle.clone());
+        cx.on_next_frame(window, move |_, window, cx| handle.focus(window, cx));
         self.scroll_handle.scroll_to_top_of_item(0);
         cx.notify();
     }
@@ -243,7 +279,12 @@ impl AppSetupModal {
         cx.notify();
     }
 
-    fn set_runtime(&mut self, runtime: FlatpakRuntime, window: &mut Window, cx: &mut Context<Self>) {
+    fn set_runtime(
+        &mut self,
+        runtime: FlatpakRuntime,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let metadata = &mut self.form.setup.metadata;
         metadata.flatpak_runtime = runtime;
         metadata.flatpak_runtime_version = runtime.default_version().into();
@@ -392,16 +433,23 @@ impl AppSetupModal {
         let selected = self.form.setup.language;
         v_flex()
             .gap_2()
-            .child(
-                Label::new("Which language should the agent write it in?").color(Color::Muted),
+            .child(Label::new("Which language should the agent write it in?").color(Color::Muted))
+            .children(
+                Language::ALL
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, language)| {
+                        ChoiceCard::radio(
+                            ("language", index),
+                            language.label(),
+                            language == selected,
+                        )
+                        .description(language.note())
+                        .on_click(cx.listener(
+                            move |this, _, window, cx| this.set_language(language, window, cx),
+                        ))
+                    }),
             )
-            .children(Language::ALL.into_iter().enumerate().map(|(index, language)| {
-                ChoiceCard::radio(("language", index), language.label(), language == selected)
-                    .description(language.note())
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.set_language(language, window, cx)
-                    }))
-            }))
     }
 
     fn field(&self, field: Field) -> AnyElement {
@@ -422,14 +470,15 @@ impl AppSetupModal {
     fn render_package(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let setup = &self.form.setup;
         let metadata = &setup.metadata;
-        let permission = |id: &'static str, label: &'static str, on: bool, toggle: fn(&mut Metadata)| {
-            Checkbox::new(id, ToggleState::from(on))
-                .label(label)
-                .on_click(cx.listener(move |this, _, _window, cx| {
-                    toggle(&mut this.form.setup.metadata);
-                    cx.notify();
-                }))
-        };
+        let permission =
+            |id: &'static str, label: &'static str, on: bool, toggle: fn(&mut Metadata)| {
+                Checkbox::new(id, ToggleState::from(on))
+                    .label(label)
+                    .on_click(cx.listener(move |this, _, _window, cx| {
+                        toggle(&mut this.form.setup.metadata);
+                        cx.notify();
+                    }))
+            };
 
         let mut package = v_flex()
             .gap_3()
@@ -450,24 +499,29 @@ impl AppSetupModal {
                 .child(SectionHeader::new("Flatpak"))
                 .child(self.row(&[Field::FlatpakId, Field::FlatpakRuntimeVersion]))
                 .child(
-                    h_flex().gap_2().children(FlatpakRuntime::ALL.into_iter().enumerate().map(
-                        |(index, runtime)| {
-                            Button::new(("runtime", index), runtime.id())
-                                .style(ButtonStyle::Outlined)
-                                .toggle_state(runtime == selected)
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.set_runtime(runtime, window, cx)
-                                }))
-                        },
-                    )),
+                    h_flex()
+                        .gap_2()
+                        .children(FlatpakRuntime::ALL.into_iter().enumerate().map(
+                            |(index, runtime)| {
+                                Button::new(("runtime", index), runtime.id())
+                                    .style(ButtonStyle::Outlined)
+                                    .toggle_state(runtime == selected)
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.set_runtime(runtime, window, cx)
+                                    }))
+                            },
+                        )),
                 )
                 .child(
                     h_flex()
                         .gap_4()
                         .flex_wrap()
-                        .child(permission("flatpak-gpu", "GPU", metadata.flatpak_gpu, |m| {
-                            m.flatpak_gpu = !m.flatpak_gpu
-                        }))
+                        .child(permission(
+                            "flatpak-gpu",
+                            "GPU",
+                            metadata.flatpak_gpu,
+                            |m| m.flatpak_gpu = !m.flatpak_gpu,
+                        ))
                         .child(permission(
                             "flatpak-network",
                             "Network",
@@ -513,24 +567,26 @@ impl AppSetupModal {
                     .child(self.row(&[Field::PwaShortName, Field::PwaStartUrl]))
                     .child(self.row(&[Field::PwaThemeColor, Field::PwaBackgroundColor]))
                     .child(
-                        h_flex().gap_2().children(PwaDisplay::ALL.into_iter().enumerate().map(
-                            |(index, each)| {
-                                Button::new(("pwa-display", index), each.value())
-                                    .style(ButtonStyle::Outlined)
-                                    .toggle_state(each == display)
-                                    .on_click(cx.listener(move |this, _, _window, cx| {
-                                        this.form.setup.metadata.pwa_display = each;
-                                        cx.notify();
-                                    }))
-                            },
-                        )),
+                        h_flex()
+                            .gap_2()
+                            .children(PwaDisplay::ALL.into_iter().enumerate().map(
+                                |(index, each)| {
+                                    Button::new(("pwa-display", index), each.value())
+                                        .style(ButtonStyle::Outlined)
+                                        .toggle_state(each == display)
+                                        .on_click(cx.listener(move |this, _, _window, cx| {
+                                            this.form.setup.metadata.pwa_display = each;
+                                            cx.notify();
+                                        }))
+                                },
+                            )),
                     );
             }
         }
         package
     }
 
-    fn render_description(&self) -> impl IntoElement {
+    fn render_description(&self, cx: &App) -> impl IntoElement {
         v_flex()
             .gap_2()
             .child(
@@ -540,10 +596,10 @@ impl AppSetupModal {
                 )
                 .color(Color::Muted),
             )
-            .child(self.description.clone())
+            .child(text_area(&self.description, cx))
     }
 
-    fn render_prompt(&self) -> impl IntoElement {
+    fn render_prompt(&self, cx: &App) -> impl IntoElement {
         v_flex()
             .gap_2()
             .child(
@@ -560,7 +616,7 @@ impl AppSetupModal {
                         .color(Color::Warning),
                 )
             })
-            .child(self.prompt.clone())
+            .child(text_area(&self.prompt, cx))
     }
 
     fn render_footer(&self, cx: &mut Context<Self>) -> ModalFooter {
@@ -592,27 +648,64 @@ impl AppSetupModal {
                             })),
                     )
                     .when(step > 0, |this| {
-                        this.child(Button::new("setup-back", "Back").on_click(cx.listener(
-                            move |this, _, window, cx| this.go_to(step - 1, window, cx),
-                        )))
+                        this.child(Button::new("setup-back", "Back").on_click(
+                            cx.listener(move |this, _, window, cx| {
+                                this.go_to(step - 1, window, cx)
+                            }),
+                        ))
                     })
                     .child(
-                        Button::new(
-                            "setup-next",
-                            if step == last { "Start" } else { "Next" },
-                        )
-                        .style(ButtonStyle::Filled)
-                        .disabled(!can_continue)
-                        .key_binding(
-                            KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
-                                .map(|binding| binding.size(rems_from_px(12_f32))),
-                        )
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.confirm(&menu::Confirm, window, cx)
-                        })),
+                        Button::new("setup-next", if step == last { "Start" } else { "Next" })
+                            .style(ButtonStyle::Filled)
+                            .disabled(!can_continue)
+                            .key_binding(
+                                KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
+                                    .map(|binding| binding.size(rems_from_px(12_f32))),
+                            )
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.confirm(&menu::Confirm, window, cx)
+                            })),
                     ),
             )
     }
+}
+
+/// A multi-line editor drawn like an [`InputField`]. The editor draws no
+/// text without a style of its own, so it gets the UI font's.
+fn text_area(editor: &Entity<Editor>, cx: &App) -> impl IntoElement {
+    let colors = cx.theme().colors();
+    let settings = ThemeSettings::get_global(cx);
+    let text = TextStyle {
+        color: colors.text,
+        font_family: settings.ui_font.family.clone(),
+        font_fallbacks: settings.ui_font.fallbacks.clone(),
+        font_features: settings.ui_font.features.clone(),
+        font_size: rems(0.875).into(),
+        font_weight: settings.ui_font.weight,
+        line_height: relative(1.4),
+        ..Default::default()
+    };
+    // EditorElement does not put the editor's focus handle in the dispatch
+    // tree, and the modal closes when focus lands outside its tree.
+    div()
+        .track_focus(&editor.focus_handle(cx))
+        .w_full()
+        .px_2()
+        .py_1p5()
+        .rounded_md()
+        .bg(colors.editor_background)
+        .border_1()
+        .border_color(colors.border_variant)
+        .child(EditorElement::new(
+            editor,
+            EditorStyle {
+                background: colors.editor_background,
+                local_player: cx.theme().players().local(),
+                text,
+                syntax: cx.theme().syntax().clone(),
+                ..Default::default()
+            },
+        ))
 }
 
 /// The field's editor, held apart from the field so it can be changed while
@@ -637,8 +730,8 @@ impl Render for AppSetupModal {
             0 => self.render_kind(cx).into_any_element(),
             1 => self.render_language(cx).into_any_element(),
             2 => self.render_package(cx).into_any_element(),
-            3 => self.render_description().into_any_element(),
-            _ => self.render_prompt().into_any_element(),
+            3 => self.render_description(cx).into_any_element(),
+            _ => self.render_prompt(cx).into_any_element(),
         };
         v_flex()
             .key_context("AppSetupModal")
@@ -656,14 +749,18 @@ impl Render for AppSetupModal {
                     )
                     .section(Section::new().child(self.render_steps(cx)))
                     .section(
+                        // The auto-height editors need a definite width,
+                        // which Section only gives a full-size child.
                         Section::new().child(
-                            div()
-                                .id("app-setup-body")
-                                .max_h(vh(0.6, window))
-                                .overflow_y_scroll()
-                                .track_scroll(&self.scroll_handle)
-                                .pr_3()
-                                .child(body),
+                            div().size_full().child(
+                                div()
+                                    .id("app-setup-body")
+                                    .max_h(vh(0.6, window))
+                                    .overflow_y_scroll()
+                                    .track_scroll(&self.scroll_handle)
+                                    .pr_3()
+                                    .child(body),
+                            ),
                         ),
                     )
                     .footer(self.render_footer(cx)),
