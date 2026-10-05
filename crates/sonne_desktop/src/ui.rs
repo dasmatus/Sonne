@@ -31,7 +31,7 @@ use crate::{
     forge::{self, ForgeRepo, PullRequest},
     mcp::{self, ToolInfo},
     routines,
-    setup::{AppSetup, SetupAction, SetupForm},
+    setup::{self, AppSetup, SetupAction, SetupForm},
     store::{
         Artifact, ArtifactKind, Chat, Entry, McpServer, McpTransport, PermissionMode, Project,
         Role, Routine, Store,
@@ -738,8 +738,8 @@ impl Sonne {
     fn finish_setup(&mut self, form: SetupForm) {
         let setup = form.setup;
         let folder = setup.folder();
-        if let Err(error) = std::fs::create_dir_all(&folder) {
-            self.error = Some(format!("could not create {}: {error}", folder.display()));
+        if let Err(error) = std::fs::create_dir_all(&folder).and_then(|()| write_manifest(&setup)) {
+            self.error = Some(format!("could not set up {}: {error}", folder.display()));
             self.setup = Some(SetupForm { setup, ..form });
             return;
         }
@@ -1723,6 +1723,21 @@ impl Sonne {
             });
         }
     }
+}
+
+/// Writes the PWA's manifest into the app's folder, unless one is there
+/// already: the agent may have edited it since, and the prompt tells it the
+/// values to keep.
+fn write_manifest(setup: &AppSetup) -> std::io::Result<()> {
+    let Some(manifest) = setup.pwa_manifest() else {
+        return Ok(());
+    };
+    let path = setup.folder().join(setup::PWA_MANIFEST);
+    if path.exists() {
+        return Ok(());
+    }
+    let text = serde_json::to_string_pretty(&manifest).map_err(std::io::Error::other)?;
+    std::fs::write(path, text + "\n")
 }
 
 fn transport_label(transport: &McpTransport) -> String {

@@ -222,6 +222,38 @@ impl WasmKind {
     }
 }
 
+/// A web app manifest's `display`.
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum PwaDisplay {
+    #[default]
+    Standalone,
+    Fullscreen,
+    MinimalUi,
+    Browser,
+}
+
+impl PwaDisplay {
+    pub const ALL: [Self; 4] = [
+        Self::Standalone,
+        Self::Fullscreen,
+        Self::MinimalUi,
+        Self::Browser,
+    ];
+
+    pub fn value(self) -> &'static str {
+        match self {
+            Self::Standalone => "standalone",
+            Self::Fullscreen => "fullscreen",
+            Self::MinimalUi => "minimal-ui",
+            Self::Browser => "browser",
+        }
+    }
+}
+
+/// The manifest file a PWA build ships, beside its `index.html`.
+pub const PWA_MANIFEST: &str = "manifest.webmanifest";
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Metadata {
@@ -244,6 +276,14 @@ pub struct Metadata {
     pub flatpak_gpu: bool,
     pub flatpak_audio: bool,
     pub wasm_kind: WasmKind,
+    /// The WASM app also runs in a browser as an installable web app.
+    pub pwa: bool,
+    /// Empty means the display name.
+    pub pwa_short_name: String,
+    pub pwa_start_url: String,
+    pub pwa_display: PwaDisplay,
+    pub pwa_theme_color: String,
+    pub pwa_background_color: String,
 }
 
 impl Default for Metadata {
@@ -265,6 +305,12 @@ impl Default for Metadata {
             flatpak_gpu: true,
             flatpak_audio: false,
             wasm_kind: WasmKind::Preview,
+            pwa: true,
+            pwa_short_name: String::new(),
+            pwa_start_url: "/".into(),
+            pwa_display: PwaDisplay::Standalone,
+            pwa_theme_color: "#111827".into(),
+            pwa_background_color: "#111827".into(),
         }
     }
 }
@@ -366,6 +412,21 @@ impl AppSetup {
                 return Some("Say which version of the Flatpak runtime to use.".into());
             }
         }
+        if self.wasm && metadata.pwa {
+            if metadata.pwa_start_url.trim().is_empty() {
+                return Some("Give the web app a start URL, such as /.".into());
+            }
+            for (what, color) in [
+                ("theme", &metadata.pwa_theme_color),
+                ("background", &metadata.pwa_background_color),
+            ] {
+                if !is_hex_color(color) {
+                    return Some(format!(
+                        "The web app's {what} colour is a hex colour such as #111827."
+                    ));
+                }
+            }
+        }
         if self.folder().is_file() {
             return Some(format!("{} is a file.", self.folder().display()));
         }
@@ -412,6 +473,37 @@ impl AppSetup {
             self.language.name(),
             join_list(&kinds),
         )
+    }
+
+    /// The web app manifest for the PWA build, when there is one.
+    pub fn pwa_manifest(&self) -> Option<serde_json::Value> {
+        let metadata = &self.metadata;
+        if !self.wasm || !metadata.pwa {
+            return None;
+        }
+        let short_name = match metadata.pwa_short_name.trim() {
+            "" => self.display_name(),
+            short => short.to_owned(),
+        };
+        let start_url = metadata.pwa_start_url.trim();
+        let mut manifest = serde_json::json!({
+            "name": self.display_name(),
+            "short_name": short_name,
+            "start_url": start_url,
+            "scope": start_url,
+            "display": metadata.pwa_display.value(),
+            "theme_color": metadata.pwa_theme_color.trim(),
+            "background_color": metadata.pwa_background_color.trim(),
+            "icons": [
+                {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+                {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
+                {"src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+            ],
+        });
+        if !metadata.summary.trim().is_empty() {
+            manifest["description"] = metadata.summary.trim().into();
+        }
+        Some(manifest)
     }
 
     /// The prompt the answers add up to: everything the agent needs to start,
@@ -524,6 +616,18 @@ impl AppSetup {
                  sandboxed with no file or network access, so keep everything it needs in \
                  memory.\n"
             ));
+            if let Some(manifest) = self.pwa_manifest() {
+                let manifest = serde_json::to_string_pretty(&manifest).unwrap_or_default();
+                prompt.push_str(&format!(
+                    "- **PWA.** The WASM app also runs in a browser as an installable web app. \
+                     Sonne wrote `{PWA_MANIFEST}` in the app's folder; keep it as it is unless \
+                     I ask, and if it is missing, write it with exactly this:\n\n```json\n\
+                     {manifest}\n```\n\n  Build a browser version of the same UI with \
+                     eframe for `wasm32-unknown-unknown` (trunk), with an `index.html` that \
+                     links the manifest, a service worker that caches the app so it works \
+                     offline, and the three icons the manifest names.\n"
+                ));
+            }
         }
         prompt.push_str(
             "\nWhen it works, tell me what you built, how to run it, and how to install each \
@@ -531,6 +635,12 @@ impl AppSetup {
         );
         prompt
     }
+}
+
+fn is_hex_color(text: &str) -> bool {
+    text.trim()
+        .strip_prefix('#')
+        .is_some_and(|hex| hex.len() == 6 && hex.chars().all(|c| c.is_ascii_hexdigit()))
 }
 
 /// `0.1.0` as `["0", "1", "0"]`, the list a pm build file's `version` takes.
@@ -899,6 +1009,52 @@ impl SetupForm {
                     metadata.wasm_kind = *kind;
                 }
             });
+            field(ui, tokens, "Web app", |ui| {
+                ui.add(
+                    Checkbox::new(&mut metadata.pwa).label("Also a PWA, with a web app manifest"),
+                );
+            });
+            if metadata.pwa {
+                let display_hint = self.setup.display_name();
+                let metadata = &mut self.setup.metadata;
+                field(ui, tokens, "Short name", |ui| {
+                    let placeholder = if display_hint.is_empty() {
+                        "Todo".to_owned()
+                    } else {
+                        display_hint
+                    };
+                    ui.add(
+                        Input::new(&mut metadata.pwa_short_name)
+                            .placeholder(placeholder)
+                            .width(200.0),
+                    );
+                });
+                field(ui, tokens, "Start URL", |ui| {
+                    ui.add(Input::new(&mut metadata.pwa_start_url).width(200.0));
+                });
+                field(ui, tokens, "Display", |ui| {
+                    let labels: Vec<&str> = PwaDisplay::ALL
+                        .iter()
+                        .map(|display| display.value())
+                        .collect();
+                    let mut selected = PwaDisplay::ALL
+                        .iter()
+                        .position(|display| *display == metadata.pwa_display);
+                    if ui
+                        .add(Select::new("pwa-display", &mut selected, &labels).width(200.0))
+                        .changed()
+                        && let Some(display) = selected.and_then(|index| PwaDisplay::ALL.get(index))
+                    {
+                        metadata.pwa_display = *display;
+                    }
+                });
+                field(ui, tokens, "Colours", |ui| {
+                    ui.label(typography::small(tokens, "theme"));
+                    ui.add(Input::new(&mut metadata.pwa_theme_color).width(90.0));
+                    ui.label(typography::small(tokens, "background"));
+                    ui.add(Input::new(&mut metadata.pwa_background_color).width(90.0));
+                });
+            }
         }
     }
 
@@ -1067,6 +1223,43 @@ mod tests {
         assert!(!prompt.contains("--filesystem=home"));
         assert!(prompt.contains("wasm32-wasip2"));
         assert!(prompt.contains("Summary: Keeps track of things"));
+    }
+
+    #[test]
+    fn wasm_apps_get_a_pwa_manifest_starting_at_root() -> anyhow::Result<()> {
+        let mut setup = todo();
+        assert_eq!(setup.pwa_manifest(), None);
+        setup.wasm = true;
+        setup.metadata.summary = "Keeps track of things".into();
+        let manifest = setup
+            .pwa_manifest()
+            .ok_or_else(|| anyhow::anyhow!("no manifest"))?;
+        assert_eq!(manifest["name"], "Todo App");
+        assert_eq!(manifest["short_name"], "Todo App");
+        assert_eq!(manifest["start_url"], "/");
+        assert_eq!(manifest["display"], "standalone");
+        assert_eq!(manifest["description"], "Keeps track of things");
+        assert_eq!(manifest["icons"].as_array().map(Vec::len), Some(3));
+        assert!(setup.prompt().contains(PWA_MANIFEST));
+        setup.metadata.pwa = false;
+        assert_eq!(setup.pwa_manifest(), None);
+        assert!(!setup.prompt().contains(PWA_MANIFEST));
+        Ok(())
+    }
+
+    #[test]
+    fn pwa_colours_must_be_hex() {
+        let mut setup = todo();
+        setup.wasm = true;
+        setup.metadata.pwa_theme_color = "navy".into();
+        assert!(
+            setup
+                .problem(2)
+                .unwrap_or_default()
+                .contains("theme colour")
+        );
+        setup.metadata.pwa_theme_color = "#1e3a8a".into();
+        assert_eq!(setup.problem(3), None);
     }
 
     #[test]
