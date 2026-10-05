@@ -44,10 +44,10 @@ pub static RELEASE_CHANNEL: LazyLock<ReleaseChannel> =
 #[cfg(target_os = "windows")]
 pub fn app_identifier() -> &'static str {
     match *RELEASE_CHANNEL {
-        ReleaseChannel::Dev => "Zed-Editor-Dev",
-        ReleaseChannel::Nightly => "Zed-Editor-Nightly",
-        ReleaseChannel::Preview => "Zed-Editor-Preview",
-        ReleaseChannel::Stable => "Zed-Editor-Stable",
+        ReleaseChannel::Dev => "Sonne-Editor-Dev",
+        ReleaseChannel::Nightly => "Sonne-Editor-Nightly",
+        ReleaseChannel::Preview => "Sonne-Editor-Preview",
+        ReleaseChannel::Stable => "Sonne-Editor-Stable",
     }
 }
 
@@ -197,18 +197,20 @@ impl ReleaseChannel {
             .map(|channel| channel.0)
     }
 
-    /// Returns whether we want to poll for updates for this [`ReleaseChannel`]
+    /// Returns whether we want to poll for updates for this [`ReleaseChannel`].
+    /// Sonne never does: updates come from the OS's package manager, not from
+    /// Zed's release server.
     pub fn poll_for_updates(&self) -> bool {
-        !matches!(self, ReleaseChannel::Dev)
+        false
     }
 
     /// Returns the display name for this [`ReleaseChannel`].
     pub fn display_name(&self) -> &'static str {
         match self {
-            ReleaseChannel::Dev => "Zed Dev",
-            ReleaseChannel::Nightly => "Zed Nightly",
-            ReleaseChannel::Preview => "Zed Preview",
-            ReleaseChannel::Stable => "Zed",
+            ReleaseChannel::Dev => "Sonne Dev",
+            ReleaseChannel::Nightly => "Sonne Nightly",
+            ReleaseChannel::Preview => "Sonne Preview",
+            ReleaseChannel::Stable => "Sonne",
         }
     }
 
@@ -227,10 +229,10 @@ impl ReleaseChannel {
     /// This also has to match the bundle identifier for Zed on macOS.
     pub fn app_id(&self) -> &'static str {
         match self {
-            ReleaseChannel::Dev => "dev.zed.Zed-Dev",
-            ReleaseChannel::Nightly => "dev.zed.Zed-Nightly",
-            ReleaseChannel::Preview => "dev.zed.Zed-Preview",
-            ReleaseChannel::Stable => "dev.zed.Zed",
+            ReleaseChannel::Dev => "io.github.dasmatus.Sonne-Dev",
+            ReleaseChannel::Nightly => "io.github.dasmatus.Sonne-Nightly",
+            ReleaseChannel::Preview => "io.github.dasmatus.Sonne-Preview",
+            ReleaseChannel::Stable => "io.github.dasmatus.Sonne",
         }
     }
 
