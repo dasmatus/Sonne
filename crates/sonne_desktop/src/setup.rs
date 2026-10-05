@@ -133,7 +133,7 @@ fn kind_step(form: &mut SetupForm, ui: &mut Ui, tokens: &Tokens) {
     ui.add_space(8.0);
     let setup = &mut form.setup;
     ui.add(Checkbox::new(&mut setup.losos).label("A LosOS app"));
-    hint(ui, tokens, "The agent writes a pm build file for it.");
+    hint(ui, tokens, "The agent writes a pm recipe (build.rhai) for it.");
     ui.add(Checkbox::new(&mut setup.flatpak).label("A Flatpak"));
     hint(
         ui,

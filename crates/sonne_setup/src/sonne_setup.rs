@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct AppSetup {
-    /// A LosOS app: one pm build file.
+    /// A LosOS app: one pm recipe, `build.rhai`.
     pub losos: bool,
     pub flatpak: bool,
     pub wasm: bool,
@@ -257,7 +257,7 @@ pub struct Metadata {
     pub homepage: String,
     /// Where the app's source goes; empty means `~/src/<name>`.
     pub folder: String,
-    /// pm packages the build file depends on, comma separated.
+    /// pm packages the recipe depends on, comma separated.
     pub pm_dependencies: String,
     pub flatpak_id: String,
     pub flatpak_runtime: FlatpakRuntime,
@@ -380,7 +380,7 @@ impl AppSetup {
                     .into(),
             );
         }
-        if version_parts(&metadata.version).is_none() {
+        if !is_version(&metadata.version) {
             return Some("The version is numbers separated by dots, such as 0.1.0.".into());
         }
         if self.flatpak {
@@ -448,7 +448,7 @@ impl AppSetup {
     pub fn instructions(&self) -> String {
         let mut kinds = Vec::new();
         if self.losos {
-            kinds.push("a LosOS app with a pm build file".to_owned());
+            kinds.push("a LosOS app with a pm recipe".to_owned());
         }
         if self.flatpak {
             kinds.push(format!("a Flatpak ({})", self.metadata.flatpak_id.trim()));
@@ -551,27 +551,29 @@ impl AppSetup {
 
         prompt.push_str("## Packaging\n\n");
         if self.losos {
-            let parts = version_parts(version).unwrap_or_default();
             let dependencies: Vec<String> = metadata
                 .pm_dependencies
                 .split(',')
                 .map(str::trim)
                 .filter(|dependency| !dependency.is_empty())
-                .map(|dependency| format!("'{dependency}'"))
+                .map(|dependency| format!("\"{dependency}\""))
                 .collect();
             prompt.push_str(&format!(
-                "- **LosOS app.** Write a pm build file, `{name}.yaml`, in the app's folder, with \
-                 `name: {name}`, `version: [{}]` and `dependencies: [{}]`, a `Build` stage that \
-                 compiles the app and an `Install` stage that puts it under `/dest/usr` \
+                "- **LosOS app.** Write a pm recipe, `build.rhai`, in the app's folder. Recipes \
+                 are Rhai scripts that call `package(#{{ ... }})` once:\n\n\
+                 ```rhai\n\
+                 package(#{{\n    name: \"{name}\",\n    version: \"{version}\",\n    \
+                 dependencies: [{}],\n    steps: [\n        \
+                 step(Build, \"compile\", [/* compile the app */]),\n        \
+                 step(Install, \"stage\", [/* install under /dest/usr */]),\n    ],\n}});\n\
+                 ```\n\n  \
+                 A dependency is the path of the other package's `build.rhai`, so find where \
+                 each one's recipe lives. The `Install` step puts the app under `/dest/usr` \
                  (`usr/bin/{name}`, plus a `.desktop` file and icon under `usr/share`). pm runs \
                  each step in a jail with no shell, `/nix/store` read-only and network only for \
-                 build files that need it, so add `--offline` wherever a step can work without \
-                 it. Check the file with `pm_explain`, then build it with `pm_build`.\n",
-                parts
-                    .iter()
-                    .map(|part| format!("'{part}'"))
-                    .collect::<Vec<_>>()
-                    .join(", "),
+                 recipes that need it, so add `--offline` wherever a step can work without it. \
+                 Sonne checks the recipe as you write it with `pm-lsp`; check it with \
+                 `pm_explain`, then build it with `pm_build`.\n",
                 dependencies.join(", "),
             ));
         }
@@ -651,13 +653,12 @@ fn is_hex_color(text: &str) -> bool {
         .is_some_and(|hex| hex.len() == 6 && hex.chars().all(|c| c.is_ascii_hexdigit()))
 }
 
-/// `0.1.0` as `["0", "1", "0"]`, the list a pm build file's `version` takes.
-fn version_parts(version: &str) -> Option<Vec<String>> {
-    let parts: Vec<String> = version.trim().split('.').map(str::to_owned).collect();
-    let valid = parts
-        .iter()
-        .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit()));
-    valid.then_some(parts)
+/// Dotted numbers such as `0.1.0`, the versions pm, cargo and Flatpak all accept.
+fn is_version(version: &str) -> bool {
+    version
+        .trim()
+        .split('.')
+        .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit()))
 }
 
 fn join_list(items: &[String]) -> String {
@@ -796,9 +797,9 @@ mod tests {
         assert!(prompt.contains("Build a new app, Todo App, in /tmp/todo-app."));
         assert!(prompt.contains("A todo list."));
         assert!(prompt.contains("Write it in Rust."));
-        assert!(prompt.contains("`todo-app.yaml`"));
-        assert!(prompt.contains("version: ['0', '1', '0']"));
-        assert!(prompt.contains("dependencies: ['ripgrep', 'fd']"));
+        assert!(prompt.contains("`build.rhai`"));
+        assert!(prompt.contains("version: \"0.1.0\""));
+        assert!(prompt.contains("dependencies: [\"ripgrep\", \"fd\"]"));
         assert!(prompt.contains("`org.example.TodoApp.yml`"));
         assert!(prompt.contains("`--share=network`"));
         assert!(!prompt.contains("--filesystem=home"));
@@ -871,7 +872,7 @@ mod tests {
         assert_eq!(
             setup.instructions(),
             "This project builds Todo App (package `todo-app`), in /tmp/todo-app, written in \
-             Rust. It ships as a LosOS app with a pm build file and a Flatpak (org.example.TodoApp)."
+             Rust. It ships as a LosOS app with a pm recipe and a Flatpak (org.example.TodoApp)."
         );
     }
 

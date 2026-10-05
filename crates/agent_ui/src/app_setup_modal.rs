@@ -409,7 +409,7 @@ impl AppSetupModal {
             .child(card(
                 "kind-losos",
                 "A LosOS app",
-                "Installed with pm, from a build file the agent writes.",
+                "Installed with pm, from a Rhai recipe the agent writes.",
                 setup.losos,
                 |setup| setup.losos = !setup.losos,
             ))
