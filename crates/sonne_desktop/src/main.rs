@@ -5,7 +5,7 @@
 
 use anyhow::{Context as _, Result, bail};
 use mcsapi_ui::{App as _, Theme};
-use sonne_desktop::{Sonne, derisk_theme, routines, store::Store, tools::ToolContext};
+use sonne_desktop::{Sonne, routines, store::Store, tools::ToolContext};
 
 fn main() -> Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
@@ -89,7 +89,7 @@ fn window() -> Result<()> {
         Box::new(move |_| {
             Ok(Box::new(Window {
                 sonne: Sonne::new(store),
-                theme: derisk_theme().unwrap_or_default(),
+                theme: sonne_desktop::sonne_theme(),
             }))
         }),
     )

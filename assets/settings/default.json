@@ -8,8 +8,8 @@
   // - "dark": Use the theme indicated by the "dark" field
   "theme": {
     "mode": "system",
-    "light": "One Light",
-    "dark": "One Dark",
+    "light": "Sonne Daylight",
+    "dark": "Sonne Dawn",
   },
   "icon_theme": "Sonne (Default)",
   // The name of a base set of key bindings to use.
