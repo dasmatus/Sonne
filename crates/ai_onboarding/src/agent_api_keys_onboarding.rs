@@ -131,9 +131,7 @@ impl RenderOnce for ApiKeysWithoutProviders {
                     )
                     .child(Divider::horizontal()),
             )
-            .child(List::new().child(ListBulletItem::new(
-                "Add your own keys to use AI without signing in.",
-            )))
+            .child(List::new().child(ListBulletItem::new("Add your own keys to use AI.")))
             .child(
                 Button::new("configure-providers", "Configure Providers")
                     .full_width()
