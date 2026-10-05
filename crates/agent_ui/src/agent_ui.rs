@@ -4,6 +4,7 @@ mod agent_diff;
 mod agent_model_selector;
 mod agent_panel;
 mod agent_registry_ui;
+mod app_setup_modal;
 mod buffer_codegen;
 mod completion_provider;
 mod config_options;
@@ -214,6 +215,8 @@ actions!(
     [
         /// Toggles the menu to create new agent threads.
         ToggleNewThreadMenu,
+        /// Asks what app a new project builds, then has the agent build it.
+        SetUpNewApp,
         /// Toggles the options menu for agent settings and preferences.
         ToggleOptionsMenu,
         /// Toggles the profile or mode selector for switching between agent profiles.

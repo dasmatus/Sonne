@@ -497,6 +497,23 @@ impl AppSetup {
         Some(manifest)
     }
 
+    /// Creates the app's folder and writes the PWA's manifest into it, unless
+    /// one is there already: the agent may have edited it since, and the
+    /// prompt tells it the values to keep.
+    pub fn write_files(&self) -> std::io::Result<()> {
+        let folder = self.folder();
+        std::fs::create_dir_all(&folder)?;
+        let Some(manifest) = self.pwa_manifest() else {
+            return Ok(());
+        };
+        let path = folder.join(PWA_MANIFEST);
+        if path.exists() {
+            return Ok(());
+        }
+        let text = serde_json::to_string_pretty(&manifest).map_err(std::io::Error::other)?;
+        std::fs::write(path, text + "\n")
+    }
+
     /// The prompt the answers add up to: everything the agent needs to start,
     /// in the order it will do it.
     pub fn prompt(&self) -> String {

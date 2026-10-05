@@ -52,7 +52,7 @@ use crate::{
     AgentDiffPane, ConversationView, CopyThreadToClipboard, Follow, LoadThreadFromClipboard,
     NewTerminalThread, NewThread, OpenActiveThreadAsMarkdown, OpenAgentDiff, RenameSelectedThread,
     ResetFastModeWarnings, ResetTrialEndUpsell, ResetTrialUpsell, ShowAllSidebarThreadMetadata,
-    ShowThreadMetadata, ToggleNewThreadMenu, ToggleOptionsMenu,
+    SetUpNewApp, ShowThreadMetadata, ToggleNewThreadMenu, ToggleOptionsMenu,
     conversation_view::{
         AcpThreadViewEvent, RootThreadUpdated, ThreadView, reset_fast_mode_warnings,
     },
@@ -399,6 +399,9 @@ pub fn init(cx: &mut App) {
                         workspace.focus_panel::<AgentPanel>(window, cx);
                         panel.update(cx, |panel, cx| panel.expand_message_editor(window, cx));
                     }
+                })
+                .register_action(|workspace, _: &SetUpNewApp, window, cx| {
+                    crate::app_setup_modal::AppSetupModal::toggle(workspace, window, cx);
                 })
                 .register_action(|workspace, _: &OpenSettings, window, cx| {
                     if let Some(panel) = workspace.panel::<AgentPanel>(cx) {
@@ -3517,7 +3520,7 @@ impl AgentPanel {
         })
     }
 
-    fn external_thread(
+    pub(crate) fn external_thread(
         &mut self,
         agent_choice: Option<crate::Agent>,
         resume_thread_id: Option<ThreadId>,
@@ -5933,6 +5936,15 @@ impl AgentPanel {
                                             });
                                         }
                                     }
+                                }),
+                        )
+                        .item(
+                            ContextMenuEntry::new("Set Up a New App…")
+                                .action(Box::new(SetUpNewApp))
+                                .icon(IconName::Sparkle)
+                                .icon_color(Color::Muted)
+                                .handler(|window, cx| {
+                                    window.dispatch_action(Box::new(SetUpNewApp), cx)
                                 }),
                         )
                         .when(supports_terminal, |menu| {
