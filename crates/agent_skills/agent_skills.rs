@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 use url::Url;
+use util::ResultExt as _;
 use util::paths::component_matches_ignore_ascii_case;
 
 /// First segment of the skills directory path: `.agents`.
@@ -693,14 +694,15 @@ pub fn read_skill_body_from_content(
 
 /// Content of the built-in `create-skill` SKILL.md, embedded at compile time.
 const CREATE_SKILL_CONTENT: &str = include_str!("builtin/create-skill/SKILL.md");
+const REDUCE_ONLINE_FINGERPRINT_CONTENT: &str =
+    include_str!("builtin/reduce-online-fingerprint/SKILL.md");
 
 /// Returns the set of skills that are compiled into the Zed binary.
 pub fn builtin_skills() -> Vec<Skill> {
-    let mut skills = Vec::new();
-    if let Ok(skill) = parse_builtin_skill("create-skill", CREATE_SKILL_CONTENT) {
-        skills.push(skill);
-    }
-    skills
+    BUILTIN_SKILL_ENTRIES
+        .iter()
+        .filter_map(|(name, content)| parse_builtin_skill(name, content).log_err())
+        .collect()
 }
 
 /// Parse a built-in skill from its embedded SKILL.md content. The skill
@@ -727,7 +729,13 @@ fn parse_builtin_skill(name: &str, content: &'static str) -> Result<Skill> {
 
 /// All built-in skills as `(name, raw_content)` pairs. Used by
 /// `builtin_skill_content` to serve the full SKILL.md without disk I/O.
-const BUILTIN_SKILL_ENTRIES: &[(&str, &str)] = &[("create-skill", CREATE_SKILL_CONTENT)];
+const BUILTIN_SKILL_ENTRIES: &[(&str, &str)] = &[
+    ("create-skill", CREATE_SKILL_CONTENT),
+    (
+        "reduce-online-fingerprint",
+        REDUCE_ONLINE_FINGERPRINT_CONTENT,
+    ),
+];
 
 /// Look up the full embedded content of a built-in skill by its
 /// synthetic file path. Returns `None` if the path doesn't match any
@@ -2176,6 +2184,20 @@ description: A skill with no body content
                     "slug {slug:?} from {input:?} failed validate_name"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn every_builtin_skill_parses() {
+        let skills = builtin_skills();
+        assert_eq!(skills.len(), BUILTIN_SKILL_ENTRIES.len());
+        for (skill, (name, content)) in skills.iter().zip(BUILTIN_SKILL_ENTRIES) {
+            assert_eq!(skill.name, *name);
+            assert!(content.len() <= MAX_SKILL_FILE_SIZE);
+            assert_eq!(
+                builtin_skill_content(&skill.skill_file_path),
+                Some(*content)
+            );
         }
     }
 
