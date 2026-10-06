@@ -1,3 +1,4 @@
+pub mod derisk;
 pub mod extension;
 pub mod registry;
 
@@ -37,6 +38,7 @@ const MAX_TIMEOUT_SECS: u64 = 600; // 10 minutes
 
 pub fn init(cx: &mut App) {
     extension::init(cx);
+    derisk::init(cx);
 }
 
 actions!(

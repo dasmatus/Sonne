@@ -52,7 +52,7 @@ There are several third-party Zed packages for various Linux distributions and p
 - Parabola: [`zed`](https://www.parabola.nu/packages/extra/x86_64/zed/)
 - ALT Linux (Sisyphus): [`zed`](https://packages.altlinux.org/en/sisyphus/srpms/zed/)
 - AOSC OS: [`zed`](https://packages.aosc.io/packages/zed)
-- Flathub: [`dev.zed.Zed`](https://flathub.org/apps/dev.zed.Zed)
+- Flathub: [`io.github.dasmatus.Sonne`](https://flathub.org/apps/io.github.dasmatus.Sonne)
 
 See [Repology](https://repology.org/project/zed-editor/versions) for a current list of Zed packages in various repositories.
 
@@ -88,9 +88,9 @@ ln -sf ~/.local/zed.app/bin/zed ~/.local/bin/zed
 If you'd like integration with an XDG-compatible desktop environment, you will also need to install the `.desktop` file:
 
 ```sh
-install -D ~/.local/zed.app/share/applications/dev.zed.Zed.desktop -t ~/.local/share/applications
-sed -i "s|Icon=zed|Icon=$HOME/.local/zed.app/share/icons/hicolor/512x512/apps/zed.png|g" ~/.local/share/applications/dev.zed.Zed.desktop
-sed -i "s|Exec=zed|Exec=$HOME/.local/zed.app/bin/zed|g" ~/.local/share/applications/dev.zed.Zed.desktop
+install -D ~/.local/zed.app/share/applications/io.github.dasmatus.Sonne.desktop -t ~/.local/share/applications
+sed -i "s|Icon=zed|Icon=$HOME/.local/zed.app/share/icons/hicolor/512x512/apps/zed.png|g" ~/.local/share/applications/io.github.dasmatus.Sonne.desktop
+sed -i "s|Exec=zed|Exec=$HOME/.local/zed.app/bin/zed|g" ~/.local/share/applications/io.github.dasmatus.Sonne.desktop
 ```
 
 ## Uninstalling Zed

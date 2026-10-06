@@ -1,7 +1,7 @@
 //! Sonne: a desktop for building software with Claude on LosOS.
 //!
-//! The window is an mcsapi app ([`Sonne`]), drawn with mcsapi's components so
-//! it looks like the rest of a derisk desktop and can run inside derisk's
+//! The window is an mcsapi app ([`Sonne`]), drawn with mcsapi's components in
+//! Sonne's rising-sun palette ([`sonne_theme`]), and can run inside derisk's
 //! compositor as well as in a window of its own. The left column holds
 //! projects, chats, routines and artifacts; the chat runs Claude Code with
 //! Sonne's MCP server; the right side shows the app the agent is building, live,
@@ -21,50 +21,18 @@ pub use ui::Sonne;
 
 use mcsapi_ui::{Theme, egui::Color32};
 
-/// The theme derisk publishes to `$XDG_RUNTIME_DIR/derisk/theme.json`, so a
-/// Sonne window outside derisk's compositor still matches the desktop.
-pub fn derisk_theme() -> Option<Theme> {
-    let path = std::path::PathBuf::from(std::env::var_os("XDG_RUNTIME_DIR")?)
-        .join("derisk")
-        .join("theme.json");
-    let json: serde_json::Value = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
-    let color = |name: &str| parse_hex(json["palette"][name].as_str()?);
-    Some(Theme {
-        background: color("background")?,
-        surface: color("surface")?,
-        foreground: color("foreground")?,
-        border: color("border")?,
-        accent: color("accent")?,
-    })
-}
-
-fn parse_hex(text: &str) -> Option<Color32> {
-    let hex = text.strip_prefix('#')?;
-    let byte = |index: usize| u8::from_str_radix(hex.get(index..index + 2)?, 16).ok();
-    match hex.len() {
-        6 => Some(Color32::from_rgb(byte(0)?, byte(2)?, byte(4)?)),
-        8 => Some(Color32::from_rgba_unmultiplied(
-            byte(0)?,
-            byte(2)?,
-            byte(4)?,
-            byte(6)?,
-        )),
-        _ => None,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn theme_colors_parse_from_hex() {
-        assert_eq!(parse_hex("#ff8000"), Some(Color32::from_rgb(255, 128, 0)));
-        assert_eq!(
-            parse_hex("#00000080"),
-            Some(Color32::from_rgba_unmultiplied(0, 0, 0, 128))
-        );
-        assert_eq!(parse_hex("ff8000"), None);
-        assert_eq!(parse_hex("#ff80"), None);
+/// Sonne's rising-sun palette: a night sky turning to dawn, with the sun's
+/// orange as the accent. The editor's "Sonne Dawn" theme uses the same colours.
+///
+/// Sonne used to take the desktop theme from derisk's
+/// `$XDG_RUNTIME_DIR/derisk/theme.json`; it now keeps its own palette in every
+/// session, since the palette is part of what Sonne is.
+pub fn sonne_theme() -> Theme {
+    Theme {
+        background: Color32::from_rgb(0x1a, 0x14, 0x30),
+        surface: Color32::from_rgb(0x25, 0x1c, 0x40),
+        foreground: Color32::from_rgb(0xfb, 0xe9, 0xd7),
+        border: Color32::from_rgb(0x3d, 0x2f, 0x5c),
+        accent: Color32::from_rgb(0xff, 0x8c, 0x42),
     }
 }

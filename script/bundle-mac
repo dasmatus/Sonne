@@ -199,8 +199,11 @@ function sign_app_binaries() {
     echo "Downloading git binary"
     download_git "${target_triple}" "${app_path}/Contents/MacOS/git"
 
-    # Note: The app identifier for our development builds is the same as the app identifier for nightly.
-    cp crates/zed/contents/$channel/embedded.provisionprofile "${app_path}/Contents/"
+    # Zed Industries' provisioning profiles are not part of Sonne; a signed
+    # macOS build supplies its own here.
+    if [[ -f "crates/zed/contents/$channel/embedded.provisionprofile" ]]; then
+        cp "crates/zed/contents/$channel/embedded.provisionprofile" "${app_path}/Contents/"
+    fi
 
     if [[ $can_code_sign = true ]]; then
         echo "Code signing binaries"

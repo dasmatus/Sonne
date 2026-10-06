@@ -699,6 +699,11 @@ impl Telemetry {
             )
         };
 
+        // Events stay in the local telemetry log: the only endpoint is Zed's own
+        // server. Tests still send, to a fake HTTP client.
+        if cfg!(not(any(test, feature = "test-support"))) {
+            return Ok(());
+        }
         let request = self.build_request(json_bytes, &request_body)?;
         let response = self.http_client.send(request).await?;
         if response.status() != 200 {
