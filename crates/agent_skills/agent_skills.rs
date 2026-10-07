@@ -696,6 +696,7 @@ pub fn read_skill_body_from_content(
 const CREATE_SKILL_CONTENT: &str = include_str!("builtin/create-skill/SKILL.md");
 const REDUCE_ONLINE_FINGERPRINT_CONTENT: &str =
     include_str!("builtin/reduce-online-fingerprint/SKILL.md");
+const CUSTOMIZE_DESKTOP_CONTENT: &str = include_str!("builtin/customize-desktop/SKILL.md");
 
 /// Returns the set of skills that are compiled into the Zed binary.
 pub fn builtin_skills() -> Vec<Skill> {
@@ -735,6 +736,7 @@ const BUILTIN_SKILL_ENTRIES: &[(&str, &str)] = &[
         "reduce-online-fingerprint",
         REDUCE_ONLINE_FINGERPRINT_CONTENT,
     ),
+    ("customize-desktop", CUSTOMIZE_DESKTOP_CONTENT),
 ];
 
 /// Look up the full embedded content of a built-in skill by its
