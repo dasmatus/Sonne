@@ -16,6 +16,10 @@ pub struct AppSetup {
     pub losos: bool,
     pub flatpak: bool,
     pub wasm: bool,
+    /// A plugin for derisk's command palette, from [`PluginTemplate::Palette`].
+    pub palette_plugin: bool,
+    /// A plugin for derisk's overview widgets, from [`PluginTemplate::Widget`].
+    pub widget_plugin: bool,
     pub language: Language,
     pub metadata: Metadata,
     /// What the app should do, in the user's words.
@@ -28,6 +32,8 @@ impl Default for AppSetup {
             losos: true,
             flatpak: false,
             wasm: false,
+            palette_plugin: false,
+            widget_plugin: false,
             language: Language::Rust,
             metadata: Metadata::default(),
             description: String::new(),
@@ -306,6 +312,94 @@ impl Default for Metadata {
     }
 }
 
+/// A derisk plugin the project builds: a WebAssembly component derisk
+/// loads into the desktop shell, built against the WIT interface derisk
+/// ships. Sonne writes a starter crate for each from `templates/`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PluginTemplate {
+    /// Rows in the command palette (`palette.wit`).
+    Palette,
+    /// Cards on the overview (`widget.wit`).
+    Widget,
+}
+
+impl PluginTemplate {
+    pub const ALL: [Self; 2] = [Self::Palette, Self::Widget];
+
+    /// What the plugin adds to the desktop, for the prompt.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Palette => "derisk command palette plugin",
+            Self::Widget => "derisk overview widget plugin",
+        }
+    }
+
+    /// The folder its crate goes in, under the project's.
+    pub fn folder(self) -> &'static str {
+        match self {
+            Self::Palette => "palette-plugin",
+            Self::Widget => "widget-plugin",
+        }
+    }
+
+    /// The folder derisk loads this kind of plugin from, under
+    /// `$XDG_DATA_HOME`.
+    pub fn install_dir(self) -> &'static str {
+        match self {
+            Self::Palette => "derisk/palette-plugins",
+            Self::Widget => "derisk/widget-plugins",
+        }
+    }
+
+    fn wit(self) -> &'static str {
+        match self {
+            Self::Palette => "crates/derisk-plugin/wit/palette/palette.wit",
+            Self::Widget => "crates/derisk-plugin/wit/widget/widget.wit",
+        }
+    }
+
+    fn examples(self) -> &'static str {
+        match self {
+            Self::Palette => "plugins/palette/",
+            Self::Widget => "plugins/widgets/",
+        }
+    }
+
+    fn templates(self) -> [(&'static str, &'static str); 2] {
+        match self {
+            Self::Palette => [
+                (
+                    "Cargo.toml",
+                    include_str!("../templates/palette-plugin/Cargo.toml"),
+                ),
+                (
+                    "src/lib.rs",
+                    include_str!("../templates/palette-plugin/lib.rs"),
+                ),
+            ],
+            Self::Widget => [
+                (
+                    "Cargo.toml",
+                    include_str!("../templates/widget-plugin/Cargo.toml"),
+                ),
+                (
+                    "src/lib.rs",
+                    include_str!("../templates/widget-plugin/lib.rs"),
+                ),
+            ],
+        }
+    }
+}
+
+/// The longest name derisk takes for a plugin.
+const MAX_PLUGIN_NAME: usize = 32;
+
+/// `text` inside a Rust or TOML double-quoted string, which escape the same
+/// two characters.
+fn quoted(text: &str) -> String {
+    text.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
 /// The wizard's steps, in order.
 pub const STEPS: [&str; 5] = ["App kind", "Language", "Package", "What it does", "Prompt"];
 
@@ -349,7 +443,7 @@ impl AppSetup {
     /// The first thing wrong with the answers up to and including `step`, said
     /// so the user knows what to change.
     pub fn problem(&self, step: usize) -> Option<String> {
-        if !self.losos && !self.flatpak && !self.wasm {
+        if !self.losos && !self.flatpak && !self.wasm && self.plugins().next().is_none() {
             return Some("Pick at least one kind of app.".into());
         }
         if step < 1 {
@@ -358,6 +452,12 @@ impl AppSetup {
         if self.wasm && !self.language.builds_wasm() {
             return Some(format!(
                 "A WASM app has to be written in Rust; {} cannot build one in Sonne.",
+                self.language.name()
+            ));
+        }
+        if self.plugins().next().is_some() && self.language != Language::Rust {
+            return Some(format!(
+                "A derisk plugin has to be written in Rust; {} cannot build one.",
                 self.language.name()
             ));
         }
@@ -379,6 +479,11 @@ impl AppSetup {
                 "The package name takes lowercase letters, digits and dashes, starting with a letter."
                     .into(),
             );
+        }
+        if self.plugins().next().is_some() && name.len() > MAX_PLUGIN_NAME {
+            return Some(format!(
+                "A derisk plugin's name is at most {MAX_PLUGIN_NAME} characters."
+            ));
         }
         if !is_version(&metadata.version) {
             return Some("The version is numbers separated by dots, such as 0.1.0.".into());
@@ -444,6 +549,50 @@ impl AppSetup {
         }
     }
 
+    /// The derisk plugins picked, in the order the prompt names them.
+    pub fn plugins(&self) -> impl Iterator<Item = PluginTemplate> {
+        let picked = [self.palette_plugin, self.widget_plugin];
+        PluginTemplate::ALL
+            .into_iter()
+            .zip(picked)
+            .filter_map(|(plugin, picked)| picked.then_some(plugin))
+    }
+
+    /// The starter files for `plugin`, with the answers filled in, by path
+    /// under the project's folder.
+    pub fn plugin_files(&self, plugin: PluginTemplate) -> Vec<(PathBuf, String)> {
+        let metadata = &self.metadata;
+        let name = metadata.name.trim();
+        let summary = match metadata.summary.trim() {
+            "" => format!("{} for derisk", self.display_name()),
+            summary => summary.to_owned(),
+        };
+        let license = match metadata.license.trim() {
+            "" => "AGPL-3.0-or-later",
+            license => license,
+        };
+        let values = [
+            ("{{crate}}", format!("{name}-{}", plugin.folder())),
+            ("{{name}}", name.to_owned()),
+            ("{{display_name}}", quoted(&self.display_name())),
+            ("{{summary}}", quoted(&summary)),
+            ("{{version}}", metadata.version.trim().to_owned()),
+            ("{{license}}", quoted(license)),
+        ];
+        plugin
+            .templates()
+            .into_iter()
+            .map(|(path, template)| {
+                let text = values
+                    .iter()
+                    .fold(template.to_owned(), |text, (key, value)| {
+                        text.replace(key, value)
+                    });
+                (PathBuf::from(plugin.folder()).join(path), text)
+            })
+            .collect()
+    }
+
     /// What every later chat in the project is told about the app.
     pub fn instructions(&self) -> String {
         let mut kinds = Vec::new();
@@ -455,6 +604,9 @@ impl AppSetup {
         }
         if self.wasm {
             kinds.push("a WASM app (wasm32-wasip2)".to_owned());
+        }
+        for plugin in self.plugins() {
+            kinds.push(format!("a {} in {}/", plugin.name(), plugin.folder()));
         }
         format!(
             "This project builds {} (package `{}`), in {}, written in {}. It ships as {}.",
@@ -497,12 +649,25 @@ impl AppSetup {
         Some(manifest)
     }
 
-    /// Creates the app's folder and writes the PWA's manifest into it, unless
-    /// one is there already: the agent may have edited it since, and the
-    /// prompt tells it the values to keep.
+    /// Creates the app's folder and writes the PWA's manifest and each
+    /// plugin's starter crate into it, leaving any file that is there
+    /// already: the agent may have edited it since, and the prompt tells it
+    /// what to keep.
     pub fn write_files(&self) -> std::io::Result<()> {
         let folder = self.folder();
         std::fs::create_dir_all(&folder)?;
+        for plugin in self.plugins() {
+            for (path, text) in self.plugin_files(plugin) {
+                let path = folder.join(path);
+                if path.exists() {
+                    continue;
+                }
+                if let Some(parent) = path.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                std::fs::write(path, text)?;
+            }
+        }
         let Some(manifest) = self.pwa_manifest() else {
             return Ok(());
         };
@@ -639,6 +804,33 @@ impl AppSetup {
                 ));
             }
         }
+        for plugin in self.plugins() {
+            let crate_name = format!("{name}-{}", plugin.folder());
+            let module = crate_name.replace('-', "_");
+            let folder = plugin.folder();
+            prompt.push_str(&format!(
+                "- **{}.** Sonne wrote a starter crate, `{crate_name}`, in `{folder}/`. It \
+                 depends on derisk's SDK by git, so it builds against the interface derisk \
+                 ships: read `{}` and the bundled plugins under `{}` in \
+                 https://github.com/losos-project/derisk before changing it. Keep the plugin's \
+                 manifest name `{name}`, and list only the inputs and action kinds it uses: \
+                 derisk shows a plugin only what its manifest asks for and drops anything \
+                 outside it. Test its logic with `cargo test` in `{folder}/`. Build it with \
+                 `cargo build --release --target wasm32-unknown-unknown`, then make it a \
+                 component with `wasm-tools component new \
+                 target/wasm32-unknown-unknown/release/{module}.wasm -o {name}.wasm` \
+                 (`cargo install wasm-tools` if it is missing). Never build it for \
+                 `wasm32-wasip2`: derisk gives plugins no WASI and refuses one that imports \
+                 it. To install it, copy `{name}.wasm` to `~/.local/share/{}/`, sign it there \
+                 with `pm sign`, and trust the key once with `pm trust {name}.wasm.sig \
+                 --trust-dir ~/.config/derisk/trusted`; derisk loads it the next time the \
+                 session starts.\n",
+                capitalized(plugin.name()),
+                plugin.wit(),
+                plugin.examples(),
+                plugin.install_dir(),
+            ));
+        }
         prompt.push_str(
             "\nWhen it works, tell me what you built, how to run it, and how to install each \
              package.",
@@ -659,6 +851,14 @@ fn is_version(version: &str) -> bool {
         .trim()
         .split('.')
         .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit()))
+}
+
+fn capitalized(text: &str) -> String {
+    let mut chars = text.chars();
+    chars
+        .next()
+        .map(|first| first.to_uppercase().chain(chars).collect())
+        .unwrap_or_default()
 }
 
 fn join_list(items: &[String]) -> String {
@@ -874,6 +1074,77 @@ mod tests {
             "This project builds Todo App (package `todo-app`), in /tmp/todo-app, written in \
              Rust. It ships as a LosOS app with a pm recipe and a Flatpak (org.example.TodoApp)."
         );
+    }
+
+    #[test]
+    fn a_plugin_is_enough_and_needs_rust_and_a_short_name() {
+        let mut setup = AppSetup {
+            losos: false,
+            ..todo()
+        };
+        assert!(setup.problem(0).is_some());
+        setup.palette_plugin = true;
+        assert_eq!(setup.problem(0), None);
+        setup.set_language(Language::PythonGtk);
+        assert!(setup.problem(1).unwrap_or_default().contains("Rust"));
+        setup.set_language(Language::Rust);
+        setup.metadata.name = "a".repeat(MAX_PLUGIN_NAME + 1);
+        assert!(setup.problem(2).unwrap_or_default().contains("at most"));
+        setup.metadata.name = "todo-app".into();
+        assert_eq!(setup.problem(3), None);
+    }
+
+    #[test]
+    fn plugin_templates_take_the_answers() {
+        let mut setup = todo();
+        setup.palette_plugin = true;
+        setup.widget_plugin = true;
+        setup.metadata.display_name = r#"Todo "Pro""#.into();
+        for plugin in PluginTemplate::ALL {
+            let files = setup.plugin_files(plugin);
+            let paths: Vec<_> = files.iter().map(|(path, _)| path.clone()).collect();
+            assert_eq!(
+                paths,
+                [
+                    PathBuf::from(plugin.folder()).join("Cargo.toml"),
+                    PathBuf::from(plugin.folder()).join("src/lib.rs"),
+                ]
+            );
+            for (_, text) in &files {
+                assert!(!text.contains("{{"), "{text}");
+            }
+            let (_, manifest) = &files[0];
+            assert!(manifest.contains(&format!("name = \"todo-app-{}\"", plugin.folder())));
+            assert!(manifest.contains("git = \"https://github.com/losos-project/derisk\""));
+            let (_, source) = &files[1];
+            assert!(source.contains(r#"Manifest::new("todo-app","#));
+            assert!(source.contains(r#"Todo \"Pro\""#));
+        }
+        let prompt = setup.prompt();
+        assert!(prompt.contains("wasm-tools component new"));
+        assert!(prompt.contains("todo_app_palette_plugin.wasm"));
+        assert!(prompt.contains("~/.local/share/derisk/widget-plugins/"));
+        assert!(
+            setup
+                .instructions()
+                .contains("a derisk overview widget plugin in widget-plugin/")
+        );
+    }
+
+    #[test]
+    fn writing_files_keeps_what_is_there() -> anyhow::Result<()> {
+        let folder = std::env::temp_dir().join(format!("sonne-setup-{}", std::process::id()));
+        let mut setup = todo();
+        setup.metadata.folder = folder.display().to_string();
+        setup.widget_plugin = true;
+        let lib = folder.join("widget-plugin/src/lib.rs");
+        std::fs::create_dir_all(lib.parent().ok_or_else(|| anyhow::anyhow!("no parent"))?)?;
+        std::fs::write(&lib, "// mine")?;
+        setup.write_files()?;
+        assert_eq!(std::fs::read_to_string(&lib)?, "// mine");
+        assert!(folder.join("widget-plugin/Cargo.toml").is_file());
+        std::fs::remove_dir_all(&folder)?;
+        Ok(())
     }
 
     #[test]

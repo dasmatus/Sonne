@@ -427,6 +427,21 @@ impl AppSetupModal {
                 setup.wasm,
                 |setup| setup.wasm = !setup.wasm,
             ))
+            .child(card(
+                "kind-palette-plugin",
+                "A derisk palette plugin",
+                "Rows in the desktop's command palette, from a starter crate Sonne writes.",
+                setup.palette_plugin,
+                |setup| setup.palette_plugin = !setup.palette_plugin,
+            ))
+            .child(card(
+                "kind-widget-plugin",
+                "A derisk overview widget",
+                "Cards on the desktop's overview, drawn in its theme, from a starter crate \
+                 Sonne writes.",
+                setup.widget_plugin,
+                |setup| setup.widget_plugin = !setup.widget_plugin,
+            ))
     }
 
     fn render_language(&self, cx: &mut Context<Self>) -> impl IntoElement {

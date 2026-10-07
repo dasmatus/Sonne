@@ -133,7 +133,11 @@ fn kind_step(form: &mut SetupForm, ui: &mut Ui, tokens: &Tokens) {
     ui.add_space(8.0);
     let setup = &mut form.setup;
     ui.add(Checkbox::new(&mut setup.losos).label("A LosOS app"));
-    hint(ui, tokens, "The agent writes a pm recipe (build.rhai) for it.");
+    hint(
+        ui,
+        tokens,
+        "The agent writes a pm recipe (build.rhai) for it.",
+    );
     ui.add(Checkbox::new(&mut setup.flatpak).label("A Flatpak"));
     hint(
         ui,
@@ -145,6 +149,18 @@ fn kind_step(form: &mut SetupForm, ui: &mut Ui, tokens: &Tokens) {
         ui,
         tokens,
         "Built for wasm32-wasip2 and run sandboxed; Sonne can preview it live.",
+    );
+    ui.add(Checkbox::new(&mut setup.palette_plugin).label("A derisk palette plugin"));
+    hint(
+        ui,
+        tokens,
+        "Rows in the desktop's command palette; Sonne writes a starter crate.",
+    );
+    ui.add(Checkbox::new(&mut setup.widget_plugin).label("A derisk overview widget"));
+    hint(
+        ui,
+        tokens,
+        "Cards on the desktop's overview, drawn in the theme; Sonne writes a starter crate.",
     );
 }
 
